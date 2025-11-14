@@ -1,0 +1,25 @@
+﻿@using DocumentFormat.OpenXml.Drawing
+@inherits LayoutComponentBase
+@* Required *@
+<MudThemeProvider IsDarkMode=true DefaultScrollbar=false />
+<MudPopoverProvider />
+
+@* Needed for dialogs *@
+<MudDialogProvider />
+
+@* Needed for snackbars *@
+<MudSnackbarProvider />
+
+    <MudStack Style="height:100vh;">
+        <MudContainer Class="d-flex align-center justify-center mt-10">
+            @Body
+        </MudContainer>
+        <MudSpacer/>
+        <MudStack Row="true" Class="d-flex align-center justify-center">
+            <MudText Align="Align.Center">Francis Offemaria</MudText>
+            <MudIconButton Icon="@Icons.Custom.Brands.GitHub" Color="Color.Primary" aria-label="github" Href="https://github.com/Offemon"/>
+        </MudStack>
+
+    </MudStack>
+
+

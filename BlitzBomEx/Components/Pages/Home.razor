@@ -1,0 +1,220 @@
+﻿@page "/"
+@inject LiteDbService LiteDbService
+<MudStack>
+    <MudText Typo="Typo.h3">Blitz BomEx</MudText>
+    <MudPaper Style="width: 700px;" Class="justify-center text-center">
+        <MudSimpleTable Style="overflow-x: auto;" Dense="true">
+            <thead>
+            <tr>
+                <th>
+                    Action   
+                </th>
+                <th>
+                    Status   
+                </th>
+                <th>
+                    Details   
+                </th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>
+                    <MudFileUpload
+                        Style="width: 200px"
+                        T="IBrowserFile"
+                        FilesChanged="UploadRecipes"
+                        Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    >
+                        <ActivatorContent>
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.FileUpload">
+                                Import Recipes
+                            </MudButton>
+                        </ActivatorContent>
+                    </MudFileUpload>
+                </td>
+                <td style="align-content: center;">
+                    @if (_hasBomData)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"/>
+                    }
+                </td>
+                <td>
+                    Updated as of: @BomDate
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <MudFileUpload
+                        Style="width: 200px"
+                        T="IBrowserFile"
+                        FilesChanged="UploadRecipes"
+                        Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    >
+                        <ActivatorContent>
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.FileUpload">
+                                Import Tagging
+                            </MudButton>
+                        </ActivatorContent>
+                    </MudFileUpload>
+                </td>
+                <td>
+                    @if (_hasTagging)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"/>
+                    }
+                </td>
+                <td>
+                    Updated as of: @TaggingDate
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <MudFileUpload
+                        Style="width: 200px"
+                        T="IBrowserFile"
+                        FilesChanged="UploadRecipes"
+                        Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    >
+                        <ActivatorContent>
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.FileUpload">
+                                Import Sales Data
+                            </MudButton>
+                        </ActivatorContent>
+                    </MudFileUpload>
+                </td>
+                <td>
+                    @if (_hasTagging)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"/>
+                    }
+                </td>
+                <td>
+                    -
+                </td>
+            </tr>
+            </tbody>
+        </MudSimpleTable>
+        <MudButton
+            Class="mt-1 mb-1"
+            Variant="Variant.Filled"
+            Color="Color.Warning"
+            StartIcon="@Icons.Material.Filled.AutoAwesome"
+            Disabled="@(!_canExplode)" 
+            Size="Size.Large">
+            Explode
+        </MudButton>
+    </MudPaper>
+    <MudTextField @bind-Value="LogText"
+                  Lines="10"
+                  Variant="Variant.Filled"
+                  Class="font-mono text-green-300 bg-gray-950"
+                  FullWidth="true"
+                  ReadOnly="true" />
+</MudStack>
+
+
+@code{
+    public List<RecipeModel>? Recipes { get; set; }
+    public List<AssembledComponentModel>? AsmComponents { get; set; }
+    public List<PosBomTaggingModel>? Taggings { get; set; }
+    public string LogText = "Console ready...";
+    private bool _hasTagging;
+    private bool _hasBomData;
+    private bool _hasSalesData;
+    private bool _canExplode;
+    private string? BomDate { get; set; } = "N/A";
+    private string? TaggingDate { get; set; } = "N/A";
+    private MetaDataModel? DataStatus { get; set; }
+
+    public Dictionary<string, List<ComponentModel>> DagTree = new Dictionary<string, List<ComponentModel>>();
+    protected override void OnInitialized()
+    {
+        try
+        {
+            DataStatus = LiteDbService.GetMetaData();
+            if (DataStatus is not null)
+            {
+                if (string.IsNullOrEmpty(DataStatus.BomVersion))
+                {
+                    _hasBomData = true;
+                    BomDate = DataStatus.BomUpdateDate.ToString("en-GB");
+                }
+
+                if (string.IsNullOrEmpty(DataStatus.TaggingVersion))
+                {
+                    _hasTagging = true;
+                    TaggingDate = DataStatus.TaggingUpdateDate.ToString("en-GB");
+                }
+            }
+            else
+            {
+                LogToConsole("Metadata not found");
+                DataStatus = new MetaDataModel();
+                _hasTagging = false;
+                _hasBomData = false;
+                _hasSalesData = false;
+                _canExplode = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            LogToConsole("Database connection failed.");
+            throw;
+        }
+        // TestConsoleLog();
+        base.OnInitialized();
+    }
+
+    public void UploadRecipes()
+    {
+        // read BOM.xlsx
+        // Save BOM from memory to LiteDB
+        DataStatus.BomVersion = new Guid().ToString();
+        // Populate DAG tree
+    }
+    public void UploadTagging()
+    {
+        // read Tagging.xlsx
+        DataStatus.TaggingVersion = new Guid().ToString();
+        // Save Tagging from memory to LiteDB
+    }
+
+    public void Explode()
+    {
+        
+    }
+    public void LogToConsole(string logMessage)
+    {
+        LogText += $"\n[{DateTime.Now:T}]: {logMessage}" ;
+    }
+    
+    public void SetMetaData()
+    {
+        if (DataStatus is not null)
+        {
+            LiteDbService.CreateMetaData(DataStatus);
+            LogToConsole("MetaData created.");
+        }
+            
+    }
+    
+}
