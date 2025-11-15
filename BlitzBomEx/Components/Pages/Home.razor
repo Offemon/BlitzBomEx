@@ -1,4 +1,5 @@
 ﻿@page "/"
+@using ClosedXML.Excel
 @inject LiteDbService LiteDbService
 <MudStack>
     <MudText Typo="Typo.h3">Blitz BomEx</MudText>
@@ -18,12 +19,43 @@
             </tr>
             </thead>
             <tbody>
+            @* <tr> *@
+            @*     <td> *@
+            @*         <MudFileUpload *@
+            @*             Style="width: 200px" *@
+            @*             T="IBrowserFile" *@
+            @*             FilesChanged="UploadDummyDataAsync" *@
+            @*             Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" *@
+            @*         > *@
+            @*             <ActivatorContent> *@
+            @*                 <MudButton Variant="Variant.Filled" *@
+            @*                            Color="Color.Primary" *@
+            @*                            StartIcon="@Icons.Material.Filled.FileUpload"> *@
+            @*                     Import Dummy Data *@
+            @*                 </MudButton> *@
+            @*             </ActivatorContent> *@
+            @*         </MudFileUpload> *@
+            @*     </td> *@
+            @*     <td style="align-content: center;"> *@
+            @*         @if (_hasDummyData) *@
+            @*         { *@
+            @*             <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/> *@
+            @*         } *@
+            @*         else *@
+            @*         { *@
+            @*             <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"/> *@
+            @*         } *@
+            @*     </td> *@
+            @*     <td> *@
+            @*         Updated as of: N/A *@
+            @*     </td> *@
+            @* </tr> *@
             <tr>
                 <td>
                     <MudFileUpload
                         Style="width: 200px"
                         T="IBrowserFile"
-                        FilesChanged="UploadRecipes"
+                        FilesChanged="UploadRecipesAsync"
                         Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     >
                         <ActivatorContent>
@@ -54,7 +86,7 @@
                     <MudFileUpload
                         Style="width: 200px"
                         T="IBrowserFile"
-                        FilesChanged="UploadRecipes"
+                        FilesChanged="UploadRecipesAsync"
                         Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     >
                         <ActivatorContent>
@@ -85,7 +117,7 @@
                     <MudFileUpload
                         Style="width: 200px"
                         T="IBrowserFile"
-                        FilesChanged="UploadRecipes"
+                        FilesChanged="UploadRecipesAsync"
                         Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     >
                         <ActivatorContent>
@@ -122,6 +154,15 @@
             Size="Size.Large">
             Explode
         </MudButton>
+        <MudButton
+            Class="mt-1 mb-1"
+            Variant="Variant.Filled"
+            Color="Color.Error"
+            StartIcon="@Icons.Material.Filled.DeleteForever"
+            @onclick="PurgeAllData"
+            Size="Size.Large">
+            Purge Collections
+        </MudButton>
     </MudPaper>
     <MudTextField @bind-Value="LogText"
                   Lines="10"
@@ -137,6 +178,7 @@
     public List<AssembledComponentModel>? AsmComponents { get; set; }
     public List<PosBomTaggingModel>? Taggings { get; set; }
     public string LogText = "Console ready...";
+    private bool _hasDummyData; //test
     private bool _hasTagging;
     private bool _hasBomData;
     private bool _hasSalesData;
@@ -144,6 +186,7 @@
     private string? BomDate { get; set; } = "N/A";
     private string? TaggingDate { get; set; } = "N/A";
     private MetaDataModel? DataStatus { get; set; }
+    public BlitzEngine Blitz = new BlitzEngine();
 
     public Dictionary<string, List<ComponentModel>> DagTree = new Dictionary<string, List<ComponentModel>>();
     protected override void OnInitialized()
@@ -153,6 +196,7 @@
             DataStatus = LiteDbService.GetMetaData();
             if (DataStatus is not null)
             {
+                _hasDummyData = true; //test
                 if (string.IsNullOrEmpty(DataStatus.BomVersion))
                 {
                     _hasBomData = true;
@@ -169,6 +213,7 @@
             {
                 LogToConsole("Metadata not found");
                 DataStatus = new MetaDataModel();
+                _hasDummyData = false; //test
                 _hasTagging = false;
                 _hasBomData = false;
                 _hasSalesData = false;
@@ -184,12 +229,173 @@
         base.OnInitialized();
     }
 
-    public void UploadRecipes()
+    // public async Task UploadDummyDataAsync(IBrowserFile files)
+    // {
+    //     try
+    //     {
+    //         LogToConsole("Purging stored dummy data...");
+    //         LiteDbService.PurgeDummyData();
+    //         // read DummyData.xlsx
+    //         var file = files;
+    //         LogToConsole($"Reading {file.Name}.");
+    //         using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+    //         using var memoryStream = new MemoryStream();
+    //         await stream.CopyToAsync(memoryStream);
+    //         memoryStream.Position = 0;
+    //         LogToConsole($"Finished reading {file.Name}.");
+    //         LogToConsole($"Saving contents of {file.Name}.");
+    //         try
+    //         {
+    //             SaveDummyData(memoryStream);
+    //         }
+    //         catch (Exception ex)
+    //         {
+    //             LogToConsole($"Failed to save contents of {file.Name} to the database");
+    //             throw;
+    //         }
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         LogToConsole("Purging failed. Database not found.");
+    //     }
+    // }
+    //
+    // public void SaveDummyData(Stream excelStream)
+    // {
+    //     using var workbook = new XLWorkbook(excelStream);
+    //     var worksheet = workbook.Worksheets.First();
+    //     var dummyDataList = new List<DummyDataModel>();
+    //
+    //     foreach (var row in worksheet.RowsUsed().Skip(1))
+    //     {
+    //         var data = new DummyDataModel
+    //         {
+    //             SomeName = row.Cell(1).GetString(),
+    //             SomeDecimal = row.Cell(2).GetValue<decimal>()
+    //         };
+    //         dummyDataList.Add(data);
+    //     }
+    //     LiteDbService.AddDummyData(dummyDataList);
+    //     LogToConsole("File Successfully saved.");
+    //
+    //     var dummydatas = LiteDbService.GetDummyData();
+    //     foreach (var dummydata in dummydatas)
+    //     {
+    //         LogToConsole($"{dummydata.SomeName} - {dummydata.SomeDecimal}");
+    //     }
+    // }
+    
+    public async Task UploadRecipesAsync(IBrowserFile xlsxfile)
     {
-        // read BOM.xlsx
-        // Save BOM from memory to LiteDB
-        DataStatus.BomVersion = new Guid().ToString();
-        // Populate DAG tree
+        try
+        {
+            var file = xlsxfile;
+            LogToConsole($"Reading {file.Name}.");
+            using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            memoryStream.Position = 0;
+            LogToConsole($"Finished reading {file.Name}.");
+            LogToConsole($"Saving contents of {file.Name}.");
+            try
+            {
+                SaveRecipeData(memoryStream);
+            }
+            catch (Exception ex)
+            {
+                LogToConsole($"Failed to save contents of {file.Name} to the database");
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            LogToConsole("Failed to read BOM data...");
+        }
+    }
+    public void SaveRecipeData(Stream excelStream)
+    {
+        try
+        {   
+            LogToConsole("Purging existing BOM data...");
+            LiteDbService.PurgeRecipes();
+            LogToConsole("Purging existing BOM data completed.");
+            LogToConsole("Preparing xlsx data for database...");
+            using var workbook = new XLWorkbook(excelStream);
+            var worksheet = workbook.Worksheets.First();
+            int totalRows = worksheet.RowsUsed().Count();
+            // int dataRows = Math.Max(0, totalRows - 1);
+            var recipeDataList = new List<RecipeModel>();
+            var xlsxContent = worksheet.RowsUsed().Skip(1).ToList();
+            int dataRows = xlsxContent.Count;
+            LogToConsole($"Detected {dataRows} entries.");
+            LogToConsole($"Mapping data to data model.");
+
+            for (int r = 0; r < dataRows; r++)
+            {
+                string classification = xlsxContent[r].Cell(9).GetString();
+                string componentName = xlsxContent[r].Cell(8).GetString();
+                string brandCode = xlsxContent[r].Cell(20).GetString();
+                if (classification=="SUB RECIPE" || classification == "FINISHED GOODS")
+                {
+                    componentName = $"{brandCode} - {componentName}";
+                }
+                var data = new RecipeModel()
+                {
+                    BrandRecipeName = xlsxContent[r].Cell(2).GetString(),
+                    RecipeName = xlsxContent[r].Cell(4).GetString(),
+                    ComponentName = componentName,
+                    Classification = classification,
+                    GeneralClassification = xlsxContent[r].Cell(17).GetString(),
+                    ContentQty = xlsxContent[r].Cell(10).GetValue<decimal>(),
+                    WholeCost = xlsxContent[r].Cell(10).GetValue<decimal>(),
+                    WholeUom = xlsxContent[r].Cell(12).GetString(),
+                    UnitQty = xlsxContent[r].Cell(13).GetValue<decimal>(),
+                    UnitUom = xlsxContent[r].Cell(14).GetString(),
+                    CostPerUnit = xlsxContent[r].Cell(15).GetValue<decimal>(),
+                    BrandCode = brandCode
+                };
+                recipeDataList.Add(data);
+            }
+            LogToConsole("Data mapping completed.");
+            // start of DAG creation
+            LogToConsole("Starting DAG Creation...");
+            var dag = recipeDataList
+                .GroupBy(r => r.BrandRecipeName)
+                .ToDictionary(
+                    g => g.Key,
+                    g=>g
+                        .GroupBy(r=>r.ComponentName)
+                        .Select(grp =>
+                        {
+                            var first = grp.First();
+                            return new ComponentModel
+                            {
+                                ComponentName = grp.Key,
+                                Classification = first.Classification,
+                                ContentQty = first.ContentQty,
+                                WholeCost = first.WholeCost,
+                                WholeUom = first.WholeUom,
+                                UnitQty = grp.Sum(r => r.UnitQty),
+                                UnitUom = first.UnitUom,
+                                CostPerUnit = first.CostPerUnit,
+                                BrandCode = first.BrandCode
+                            };
+                        })
+                        .ToList()
+                    );
+            // end of DAG creation
+            LogToConsole($"DAG creation completed.");
+            LogToConsole($"{dag.Count} recipes detected from uploaded file.");
+            LogToConsole($"Saving recipes to the database.");
+            LiteDbService.AddRecipe(recipeDataList);
+            _hasBomData = true;
+            LogToConsole("File Successfully saved.");
+            
+        }
+        catch (Exception ex)
+        {
+            LogToConsole($"Error: {ex.Message}");
+        }
     }
     public void UploadTagging()
     {
@@ -215,6 +421,28 @@
             LogToConsole("MetaData created.");
         }
             
+    }
+
+    public void PurgeAllData()
+    {
+        LogToConsole("Purging started...");
+        LogToConsole("Purging all dummy data");
+        LiteDbService.PurgeDummyData();
+        _hasBomData = false;
+        LogToConsole("Purging of all dummy data completed");
+        
+        LogToConsole("Purging all recipes...");
+        LiteDbService.PurgeRecipes();
+        _hasSalesData = false;
+        LogToConsole("Purging of all recipes completed");
+        
+        LogToConsole("Purging all POS tagging...");
+        LiteDbService.PurgePosBomTaggings();
+        _hasTagging = false;
+        LogToConsole("Purging of all POS tagging completed");
+        LogToConsole("Purged the entire database.");
+        _canExplode = false;
+
     }
     
 }
