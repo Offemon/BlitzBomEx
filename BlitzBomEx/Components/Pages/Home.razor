@@ -1,6 +1,7 @@
 ﻿@page "/"
 @using ClosedXML.Excel
 @inject LiteDbService LiteDbService
+
 <MudStack>
     <MudText Typo="Typo.h3">Blitz BomEx</MudText>
     <MudPaper Style="width: 700px;" Class="justify-center text-center">
@@ -8,73 +9,54 @@
             <thead>
             <tr>
                 <th>
-                    Action   
+                    Dataset
                 </th>
                 <th>
-                    Status   
+                    Action
                 </th>
                 <th>
-                    Details   
+                    Status
+                </th>
+                <th>
+                    Details
                 </th>
             </tr>
             </thead>
             <tbody>
-            @* <tr> *@
-            @*     <td> *@
-            @*         <MudFileUpload *@
-            @*             Style="width: 200px" *@
-            @*             T="IBrowserFile" *@
-            @*             FilesChanged="UploadDummyDataAsync" *@
-            @*             Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" *@
-            @*         > *@
-            @*             <ActivatorContent> *@
-            @*                 <MudButton Variant="Variant.Filled" *@
-            @*                            Color="Color.Primary" *@
-            @*                            StartIcon="@Icons.Material.Filled.FileUpload"> *@
-            @*                     Import Dummy Data *@
-            @*                 </MudButton> *@
-            @*             </ActivatorContent> *@
-            @*         </MudFileUpload> *@
-            @*     </td> *@
-            @*     <td style="align-content: center;"> *@
-            @*         @if (_hasDummyData) *@
-            @*         { *@
-            @*             <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/> *@
-            @*         } *@
-            @*         else *@
-            @*         { *@
-            @*             <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"/> *@
-            @*         } *@
-            @*     </td> *@
-            @*     <td> *@
-            @*         Updated as of: N/A *@
-            @*     </td> *@
-            @* </tr> *@
             <tr>
+                <td>
+                    <MudText>Recipes</MudText>
+                </td>
                 <td>
                     <MudFileUpload
                         Style="width: 200px"
                         T="IBrowserFile"
                         FilesChanged="UploadRecipesAsync"
-                        Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    >
+                        Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
                         <ActivatorContent>
                             <MudButton Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       StartIcon="@Icons.Material.Filled.FileUpload">
-                                Import Recipes
+                                       Color="@RecipeUploadBtnColor"
+                                       StartIcon="@RecipeUploadBtnIcon">
+                                Import
                             </MudButton>
                         </ActivatorContent>
                     </MudFileUpload>
                 </td>
                 <td style="align-content: center;">
-                    @if (_hasBomData)
+                    @if (_isLoadingRecipes)
                     {
-                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/>
+                        <MudProgressCircular Color="Color.Primary" Size="Size.Small" Indeterminate="true"/>
                     }
                     else
                     {
-                        <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"/>
+                        if (_hasRecipesData)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/>
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"/>
+                        }
                     }
                 </td>
                 <td>
@@ -83,29 +65,38 @@
             </tr>
             <tr>
                 <td>
+                    <MudText>Tagging</MudText>
+                </td>
+                <td>
                     <MudFileUpload
                         Style="width: 200px"
                         T="IBrowserFile"
-                        FilesChanged="UploadRecipesAsync"
-                        Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    >
+                        FilesChanged="UploadTagging"
+                        Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
                         <ActivatorContent>
                             <MudButton Variant="Variant.Filled"
                                        Color="Color.Primary"
                                        StartIcon="@Icons.Material.Filled.FileUpload">
-                                Import Tagging
+                                Import
                             </MudButton>
                         </ActivatorContent>
                     </MudFileUpload>
                 </td>
                 <td>
-                    @if (_hasTagging)
+                    @if (_isLoadingTagging)
                     {
-                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/>
+                        <MudProgressCircular Color="Color.Primary" Size="Size.Small" Indeterminate="true"/>
                     }
                     else
                     {
-                        <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"/>
+                        if (_hasTagging)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/>
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"/>
+                        }
                     }
                 </td>
                 <td>
@@ -114,29 +105,38 @@
             </tr>
             <tr>
                 <td>
+                    <MudText>Sales Data</MudText>
+                </td>
+                <td>
                     <MudFileUpload
                         Style="width: 200px"
                         T="IBrowserFile"
-                        FilesChanged="UploadRecipesAsync"
-                        Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    >
+                        FilesChanged="UploadSalesData"
+                        Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
                         <ActivatorContent>
                             <MudButton Variant="Variant.Filled"
                                        Color="Color.Primary"
                                        StartIcon="@Icons.Material.Filled.FileUpload">
-                                Import Sales Data
+                                Import
                             </MudButton>
                         </ActivatorContent>
                     </MudFileUpload>
                 </td>
                 <td>
-                    @if (_hasTagging)
+                    @if (_isLoadingSalesData)
                     {
-                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/>
+                        <MudProgressCircular Color="Color.Primary" Size="Size.Small" Indeterminate="true"/>
                     }
                     else
                     {
-                        <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"/>
+                        @if (_hasSalesData)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/>
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"/>
+                        }
                     }
                 </td>
                 <td>
@@ -159,6 +159,7 @@
             Variant="Variant.Filled"
             Color="Color.Error"
             StartIcon="@Icons.Material.Filled.DeleteForever"
+            Disabled="@(!_canPurge)"
             @onclick="PurgeAllData"
             Size="Size.Large">
             Purge Collections
@@ -178,117 +179,63 @@
     public List<AssembledComponentModel>? AsmComponents { get; set; }
     public List<PosBomTaggingModel>? Taggings { get; set; }
     public string LogText = "Console ready...";
-    private bool _hasDummyData; //test
+    // private bool _hasDummyData;
+    private bool _hasRecipesData;
+    private bool _isLoadingRecipes;
+    public string RecipeUploadBtnIcon { get; set; }
+    public Color RecipeUploadBtnColor { get; set; }
+
     private bool _hasTagging;
-    private bool _hasBomData;
+    private bool _isLoadingTagging;
+    public string TaggingUploadBtnIcon { get; set; }
+    public Color TaggingUploadBtnColor { get; set; }
+    
     private bool _hasSalesData;
+    private bool _isLoadingSalesData;
+    public string SalesDataUploadBtnIcon { get; set; }
+    public Color SalesDataUploadBtnColor { get; set; }
+    
+    private bool _isEnabled = true;
     private bool _canExplode;
+    private bool _canPurge;
     private string? BomDate { get; set; } = "N/A";
     private string? TaggingDate { get; set; } = "N/A";
     private MetaDataModel? DataStatus { get; set; }
     public BlitzEngine Blitz = new BlitzEngine();
-
     public Dictionary<string, List<ComponentModel>> DagTree = new Dictionary<string, List<ComponentModel>>();
+    
     protected override void OnInitialized()
     {
         try
         {
-            DataStatus = LiteDbService.GetMetaData();
-            if (DataStatus is not null)
+            if (LiteDbService.GetRecipes().Any())
             {
-                _hasDummyData = true; //test
-                if (string.IsNullOrEmpty(DataStatus.BomVersion))
-                {
-                    _hasBomData = true;
-                    BomDate = DataStatus.BomUpdateDate.ToString("en-GB");
-                }
-
-                if (string.IsNullOrEmpty(DataStatus.TaggingVersion))
-                {
-                    _hasTagging = true;
-                    TaggingDate = DataStatus.TaggingUpdateDate.ToString("en-GB");
-                }
+                _hasRecipesData = true;
+                RecipeUploadBtnIcon = Icons.Material.Filled.Refresh;
+                RecipeUploadBtnColor = Color.Success;
             }
             else
             {
-                LogToConsole("Metadata not found");
-                DataStatus = new MetaDataModel();
-                _hasDummyData = false; //test
-                _hasTagging = false;
-                _hasBomData = false;
-                _hasSalesData = false;
-                _canExplode = false;
+                _hasRecipesData = false;
+                RecipeUploadBtnIcon = Icons.Material.Filled.Upload;
+                RecipeUploadBtnColor = Color.Secondary;
             }
         }
         catch (Exception ex)
         {
-            LogToConsole("Database connection failed.");
+            LogToConsole("Database not found!");
             throw;
         }
-        // TestConsoleLog();
+
+        _canPurge = HasPurgables();
         base.OnInitialized();
     }
-
-    // public async Task UploadDummyDataAsync(IBrowserFile files)
-    // {
-    //     try
-    //     {
-    //         LogToConsole("Purging stored dummy data...");
-    //         LiteDbService.PurgeDummyData();
-    //         // read DummyData.xlsx
-    //         var file = files;
-    //         LogToConsole($"Reading {file.Name}.");
-    //         using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
-    //         using var memoryStream = new MemoryStream();
-    //         await stream.CopyToAsync(memoryStream);
-    //         memoryStream.Position = 0;
-    //         LogToConsole($"Finished reading {file.Name}.");
-    //         LogToConsole($"Saving contents of {file.Name}.");
-    //         try
-    //         {
-    //             SaveDummyData(memoryStream);
-    //         }
-    //         catch (Exception ex)
-    //         {
-    //             LogToConsole($"Failed to save contents of {file.Name} to the database");
-    //             throw;
-    //         }
-    //     }
-    //     catch (Exception ex)
-    //     {
-    //         LogToConsole("Purging failed. Database not found.");
-    //     }
-    // }
-    //
-    // public void SaveDummyData(Stream excelStream)
-    // {
-    //     using var workbook = new XLWorkbook(excelStream);
-    //     var worksheet = workbook.Worksheets.First();
-    //     var dummyDataList = new List<DummyDataModel>();
-    //
-    //     foreach (var row in worksheet.RowsUsed().Skip(1))
-    //     {
-    //         var data = new DummyDataModel
-    //         {
-    //             SomeName = row.Cell(1).GetString(),
-    //             SomeDecimal = row.Cell(2).GetValue<decimal>()
-    //         };
-    //         dummyDataList.Add(data);
-    //     }
-    //     LiteDbService.AddDummyData(dummyDataList);
-    //     LogToConsole("File Successfully saved.");
-    //
-    //     var dummydatas = LiteDbService.GetDummyData();
-    //     foreach (var dummydata in dummydatas)
-    //     {
-    //         LogToConsole($"{dummydata.SomeName} - {dummydata.SomeDecimal}");
-    //     }
-    // }
     
     public async Task UploadRecipesAsync(IBrowserFile xlsxfile)
     {
         try
         {
+            _isLoadingRecipes = true;
             var file = xlsxfile;
             LogToConsole($"Reading {file.Name}.");
             using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
@@ -299,7 +246,10 @@
             LogToConsole($"Saving contents of {file.Name}.");
             try
             {
-                SaveRecipeData(memoryStream);
+                await Task.Run(() =>
+                {
+                    SaveRecipeData(memoryStream);
+                });
             }
             catch (Exception ex)
             {
@@ -311,7 +261,9 @@
         {
             LogToConsole("Failed to read BOM data...");
         }
+        _isLoadingRecipes = false;
     }
+    
     public void SaveRecipeData(Stream excelStream)
     {
         try
@@ -388,7 +340,13 @@
             LogToConsole($"{dag.Count} recipes detected from uploaded file.");
             LogToConsole($"Saving recipes to the database.");
             LiteDbService.AddRecipe(recipeDataList);
-            _hasBomData = true;
+            DataStatus.BomUpdateDate = DateTime.Now;
+            DataStatus.BomVersion = Convert.ToBase64String(Guid.NewGuid().ToByteArray())
+                .Replace("/", "_")
+                .Replace("+", "-")
+                .Substring(0,15);
+            _hasRecipesData = true;
+            InsertMetaData();
             LogToConsole("File Successfully saved.");
             
         }
@@ -397,17 +355,63 @@
             LogToConsole($"Error: {ex.Message}");
         }
     }
-    public void UploadTagging()
+    
+    public async Task UploadTagging(IBrowserFile xlsxfile)
     {
-        // read Tagging.xlsx
-        DataStatus.TaggingVersion = new Guid().ToString();
-        // Save Tagging from memory to LiteDB
+        try
+        {
+            _isLoadingTagging = true;
+            var file = xlsxfile;
+            LogToConsole($"Reading {file.Name}.");
+            using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            memoryStream.Position = 0;
+            LogToConsole($"Finished reading {file.Name}.");
+            LogToConsole($"Saving contents of {file.Name}.");
+            try
+            {
+                await Task.Run(() =>
+                {
+                    SaveTaggingData(memoryStream);
+                });
+            }
+            catch (Exception ex)
+            {
+                LogToConsole($"Failed to save contents of {file.Name} to the database");
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            LogToConsole("Failed to read Sales Tagging data...");
+        }
+        _isLoadingTagging = false;
+    }
+
+    public void SaveTaggingData(Stream excelStream)
+    {
+        
+    }
+
+    public void UploadSalesData()
+    {
+        
+    }
+
+    public void InsertMetaData()
+    {
+        if (_hasRecipesData && _hasTagging)
+        {
+            LiteDbService.CreateMetaData(DataStatus);
+        }
     }
 
     public void Explode()
     {
         
     }
+    
     public void LogToConsole(string logMessage)
     {
         LogText += $"\n[{DateTime.Now:T}]: {logMessage}" ;
@@ -423,12 +427,35 @@
             
     }
 
+    public void DisableAllBtn()
+    {
+        _isEnabled = false;
+        _canPurge = false;
+        _canExplode = false;
+    }
+
+    public void EnableAllBtn()
+    {
+        _isEnabled = true;
+        _canPurge = HasPurgables();
+        _canExplode = true;
+    }
+
+    public bool HasPurgables()
+    {
+        if (LiteDbService.GetRecipes().Any() || LiteDbService.GetPosBomTaggings().Any() || DagTree.Any())
+        {
+            return true;
+        }
+        return false;
+    }
+    
     public void PurgeAllData()
     {
         LogToConsole("Purging started...");
         LogToConsole("Purging all dummy data");
         LiteDbService.PurgeDummyData();
-        _hasBomData = false;
+        _hasRecipesData = false;
         LogToConsole("Purging of all dummy data completed");
         
         LogToConsole("Purging all recipes...");
@@ -441,8 +468,99 @@
         _hasTagging = false;
         LogToConsole("Purging of all POS tagging completed");
         LogToConsole("Purged the entire database.");
+        
+        LogToConsole("Clearing memory datastructures...");
+        DagTree.Clear();
+        LogToConsole("Memory datastructures cleared!");
         _canExplode = false;
 
     }
     
+    // public async Task UploadDummyDataAsync(IBrowserFile files)
+    // {
+    //     try
+    //     {
+    //         LogToConsole("Purging stored dummy data...");
+    //         LiteDbService.PurgeDummyData();
+    //         // read DummyData.xlsx
+    //         var file = files;
+    //         LogToConsole($"Reading {file.Name}.");
+    //         using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+    //         using var memoryStream = new MemoryStream();
+    //         await stream.CopyToAsync(memoryStream);
+    //         memoryStream.Position = 0;
+    //         LogToConsole($"Finished reading {file.Name}.");
+    //         LogToConsole($"Saving contents of {file.Name}.");
+    //         try
+    //         {
+    //             SaveDummyData(memoryStream);
+    //         }
+    //         catch (Exception ex)
+    //         {
+    //             LogToConsole($"Failed to save contents of {file.Name} to the database");
+    //             throw;
+    //         }
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         LogToConsole("Purging failed. Database not found.");
+    //     }
+    // }
+    //
+    // public void SaveDummyData(Stream excelStream)
+    // {
+    //     using var workbook = new XLWorkbook(excelStream);
+    //     var worksheet = workbook.Worksheets.First();
+    //     var dummyDataList = new List<DummyDataModel>();
+    //
+    //     foreach (var row in worksheet.RowsUsed().Skip(1))
+    //     {
+    //         var data = new DummyDataModel
+    //         {
+    //             SomeName = row.Cell(1).GetString(),
+    //             SomeDecimal = row.Cell(2).GetValue<decimal>()
+    //         };
+    //         dummyDataList.Add(data);
+    //     }
+    //     LiteDbService.AddDummyData(dummyDataList);
+    //     LogToConsole("File Successfully saved.");
+    //
+    //     var dummydatas = LiteDbService.GetDummyData();
+    //     foreach (var dummydata in dummydatas)
+    //     {
+    //         LogToConsole($"{dummydata.SomeName} - {dummydata.SomeDecimal}");
+    //     }
+    // }
+    
 }
+@* <tr> *@
+@*     <td> *@
+@*         <MudFileUpload *@
+@*             Style="width: 200px" *@
+@*             T="IBrowserFile" *@
+@*             FilesChanged="UploadDummyDataAsync" *@
+@*             Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" *@
+@*         > *@
+@*             <ActivatorContent> *@
+@*                 <MudButton Variant="Variant.Filled" *@
+@*                            Color="Color.Primary" *@
+@*                            StartIcon="@Icons.Material.Filled.FileUpload"> *@
+@*                     Import Dummy Data *@
+@*                 </MudButton> *@
+@*             </ActivatorContent> *@
+@*         </MudFileUpload> *@
+@*     </td> *@
+@*     <td style="align-content: center;"> *@
+@*         @if (_hasDummyData) *@
+@*         { *@
+@*             <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"/> *@
+@*         } *@
+@*         else *@
+@*         { *@
+@*             <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"/> *@
+@*         } *@
+@*     </td> *@
+@*     <td> *@
+@*         Updated as of: N/A *@
+@*     </td> *@
+@* </tr> *@
