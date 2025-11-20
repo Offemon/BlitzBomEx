@@ -8,18 +8,20 @@ public class LiteDbService
     private readonly ILiteCollection<RecipeModel> _recipes;
     private readonly ILiteCollection<PosBomTaggingModel> _posBomTaggings;
     private readonly ILiteCollection<MetaDataModel> _metaData;
+    private readonly ILiteCollection<SalesDataModel> _salesData;
     
-    private readonly ILiteCollection<DummyDataModel> _dummyData;
+    // private readonly ILiteCollection<DummyDataModel> _dummyData;
     // private readonly ILiteCollection<AssembledComponentModel> _subrecipes;
 
     public LiteDbService(string dbPath = "BlitzBomEx.db")
     {
         _db = new LiteDatabase(dbPath);
         _recipes = _db.GetCollection<RecipeModel>("Recipes");
-        // _subrecipes = _db.GetCollection<AssembledComponentModel>("AssembledComponents");
         _posBomTaggings =  _db.GetCollection<PosBomTaggingModel>("PosToBomTagging");
         _metaData = _db.GetCollection<MetaDataModel>("MetaData");
-        _dummyData = _db.GetCollection<DummyDataModel>("DummyData");
+        _salesData = _db.GetCollection<SalesDataModel>("SalesData");
+        // _dummyData = _db.GetCollection<DummyDataModel>("DummyData");
+        // _subrecipes = _db.GetCollection<AssembledComponentModel>("AssembledComponents");
     }
     public List<RecipeModel> GetRecipes() => _recipes.FindAll().ToList();
     public void AddRecipe(RecipeModel recipe) => _recipes.Insert(recipe);
@@ -36,12 +38,16 @@ public class LiteDbService
     public void UpdateMetaData(MetaDataModel metaData) => _metaData.Update(metaData);
     public void PurgeMetaData() => _metaData.DeleteAll();
     
+    public List<SalesDataModel> GetSalesData() => _salesData.FindAll().ToList();
+    public void AddSalesData(List<SalesDataModel> salesData) => _salesData.Insert(salesData);
+    public void PurgeSalesData() => _salesData.DeleteAll();
+    
     
     // For Testing
-    public List<DummyDataModel> GetDummyData() => _dummyData.FindAll().ToList();
-    public void AddDummyData(DummyDataModel dummyData) => _dummyData.Insert(dummyData);
-    public void AddDummyData(List<DummyDataModel> dummyData) => _dummyData.InsertBulk(dummyData);
-    public void PurgeDummyData() => _dummyData.DeleteAll();
+    // public List<DummyDataModel> GetDummyData() => _dummyData.FindAll().ToList();
+    // public void AddDummyData(DummyDataModel dummyData) => _dummyData.Insert(dummyData);
+    // public void AddDummyData(List<DummyDataModel> dummyData) => _dummyData.InsertBulk(dummyData);
+    // public void PurgeDummyData() => _dummyData.DeleteAll();
 }
     // public List<AssembledComponentModel> GetSubRecipes() => _subrecipes.FindAll().ToList();
     //public void AddAssembledComponent(AssembledComponentModel recipe) => _subrecipes.Insert(recipe);

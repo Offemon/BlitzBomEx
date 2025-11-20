@@ -3,7 +3,10 @@
 @inject LiteDbService LiteDbService
 
 <MudStack>
-    <MudText Typo="Typo.h3">Blitz BomEx</MudText>
+    <MudStack Row="true" Class="align-items-baseline">
+        <MudText Typo="Typo.h3">Blitz BomEx</MudText>
+        <MudText Typo="Typo.caption">@($"v{AppVersion}")</MudText>
+    </MudStack>
     <MudPaper Style="width: 700px;" Class="justify-center text-center">
         <MudSimpleTable Style="overflow-x: auto;" Dense="true">
             <thead>
@@ -29,7 +32,6 @@
                 </td>
                 <td>
                     <MudFileUpload
-                        Style="width: 200px"
                         T="IBrowserFile"
                         FilesChanged="UploadRecipesAsync"
                         Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
@@ -37,7 +39,7 @@
                             <MudButton Variant="Variant.Filled"
                                        Color="@RecipeUploadBtnColor"
                                        StartIcon="@RecipeUploadBtnIcon">
-                                Import
+                                @(_hasRecipesData ? "Update":"Import")
                             </MudButton>
                         </ActivatorContent>
                     </MudFileUpload>
@@ -69,7 +71,6 @@
                 </td>
                 <td>
                     <MudFileUpload
-                        Style="width: 200px"
                         T="IBrowserFile"
                         FilesChanged="UploadTagging"
                         Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
@@ -109,7 +110,6 @@
                 </td>
                 <td>
                     <MudFileUpload
-                        Style="width: 200px"
                         T="IBrowserFile"
                         FilesChanged="UploadSalesData"
                         Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
@@ -150,7 +150,7 @@
             Variant="Variant.Filled"
             Color="Color.Warning"
             StartIcon="@Icons.Material.Filled.AutoAwesome"
-            Disabled="@(!_canExplode)" 
+            Disabled="@(!_canExplode)"
             Size="Size.Large">
             Explode
         </MudButton>
@@ -170,16 +170,19 @@
                   Variant="Variant.Filled"
                   Class="font-mono text-green-300 bg-gray-950"
                   FullWidth="true"
-                  ReadOnly="true" />
+                  ReadOnly="true"/>
 </MudStack>
 
 
 @code{
+    public string AppVersion = "0.0.1";
     public List<RecipeModel>? Recipes { get; set; }
     public List<AssembledComponentModel>? AsmComponents { get; set; }
     public List<PosBomTaggingModel>? Taggings { get; set; }
     public string LogText = "Console ready...";
     // private bool _hasDummyData;
+    private bool _hasMetaData;
+    
     private bool _hasRecipesData;
     private bool _isLoadingRecipes;
     public string RecipeUploadBtnIcon { get; set; }
@@ -200,35 +203,23 @@
     private bool _canPurge;
     private string? BomDate { get; set; } = "N/A";
     private string? TaggingDate { get; set; } = "N/A";
+    private string? SalesUpdateDate { get; set; } = "N/A";
+    private string? SalesStartDate { get; set; } = "N/A";
+    private string? SalesEndDate { get; set; } = "N/A";
     private MetaDataModel? DataStatus { get; set; }
     public BlitzEngine Blitz = new BlitzEngine();
     public Dictionary<string, List<ComponentModel>> DagTree = new Dictionary<string, List<ComponentModel>>();
     
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        try
+        Console.WriteLine("OnInitialized");
+        await InitializeMetaDataAsync();
+        await Task.Run(() =>
         {
-            if (LiteDbService.GetRecipes().Any())
-            {
-                _hasRecipesData = true;
-                RecipeUploadBtnIcon = Icons.Material.Filled.Refresh;
-                RecipeUploadBtnColor = Color.Success;
-            }
-            else
-            {
-                _hasRecipesData = false;
-                RecipeUploadBtnIcon = Icons.Material.Filled.Upload;
-                RecipeUploadBtnColor = Color.Secondary;
-            }
-        }
-        catch (Exception ex)
-        {
-            LogToConsole("Database not found!");
-            throw;
-        }
-
+            CheckAllData();
+        });
         _canPurge = HasPurgables();
-        base.OnInitialized();
+        await base.OnInitializedAsync();
     }
     
     public async Task UploadRecipesAsync(IBrowserFile xlsxfile)
@@ -340,15 +331,23 @@
             LogToConsole($"{dag.Count} recipes detected from uploaded file.");
             LogToConsole($"Saving recipes to the database.");
             LiteDbService.AddRecipe(recipeDataList);
-            DataStatus.BomUpdateDate = DateTime.Now;
-            DataStatus.BomVersion = Convert.ToBase64String(Guid.NewGuid().ToByteArray())
-                .Replace("/", "_")
-                .Replace("+", "-")
-                .Substring(0,15);
-            _hasRecipesData = true;
-            InsertMetaData();
+            CheckRecipesData();
             LogToConsole("File Successfully saved.");
-            
+            _canPurge = HasPurgables();
+            // try
+            // {
+            //     DataStatus.BomUpdateDate = DateTime.Now;
+            //     DataStatus.BomVersion = Convert.ToBase64String(Guid.NewGuid().ToByteArray())
+            //         .Replace("/", "_")
+            //         .Replace("+", "-")
+            //         .Substring(0,15);
+            //     InsertMetaData();
+            // }
+            // catch (Exception ex)
+            // {
+            //     
+            // }
+
         }
         catch (Exception ex)
         {
@@ -399,14 +398,39 @@
         
     }
 
-    public void InsertMetaData()
+    public async Task InitializeMetaDataAsync()
     {
-        if (_hasRecipesData && _hasTagging)
+        try
         {
-            LiteDbService.CreateMetaData(DataStatus);
+            DataStatus = await Task.Run(() =>
+            {
+                var meta = LiteDbService.GetMetaData();
+                LogToConsole("Checking Metadata...");
+                if (meta is null)
+                {
+                    LogToConsole("Metadata not found");
+                    LogToConsole("Initializing Metadata...");
+                    meta = new MetaDataModel();
+                    LiteDbService.CreateMetaData(meta);
+                    LogToConsole("Metadata created.");
+                }
+                LogToConsole("Loading Metadata...");
+                return meta;
+            });
+            _hasMetaData = true;
+            BomDate = FormatDateTime(DataStatus.BomUpdateDate);
+            TaggingDate = FormatDateTime(DataStatus.TaggingUpdateDate);
+            SalesUpdateDate = FormatDateTime(DataStatus.SalesUpdateDate);
+            SalesStartDate = FormatDateOnly(DataStatus.SalesStartDate);
+            SalesEndDate = FormatDateOnly(DataStatus.SalesEndDate);
+            LogToConsole("Metadata loaded!");
+        }
+        catch (Exception ex)
+        {
+            LogToConsole($"Failed to access database: {ex.Message}");
+            throw;
         }
     }
-
     public void Explode()
     {
         
@@ -416,15 +440,83 @@
     {
         LogText += $"\n[{DateTime.Now:T}]: {logMessage}" ;
     }
-    
-    public void SetMetaData()
+
+    public void CheckRecipesData()
     {
-        if (DataStatus is not null)
+        try
         {
-            LiteDbService.CreateMetaData(DataStatus);
-            LogToConsole("MetaData created.");
+            if (LiteDbService.GetRecipes().Any())
+            {
+                _hasRecipesData = true;
+                RecipeUploadBtnIcon = Icons.Material.Filled.Refresh;
+                RecipeUploadBtnColor = Color.Success;
+                // Generate DAG from stored Recipe data.
+            }
+            else
+            {
+                _hasRecipesData = false;
+                RecipeUploadBtnIcon = Icons.Material.Filled.Upload;
+                RecipeUploadBtnColor = Color.Secondary;
+            }
         }
-            
+        catch (Exception ex)
+        {
+            LogToConsole("Database not found!");
+            throw;
+        }
+    }
+    public void CheckTaggingData()
+    {
+        try
+        {
+            if (LiteDbService.GetRecipes().Any())
+            {
+                _hasTagging = true;
+                TaggingUploadBtnIcon = Icons.Material.Filled.Refresh;
+                TaggingUploadBtnColor = Color.Success;
+            }
+            else
+            {
+                _hasTagging = false;
+                TaggingUploadBtnIcon = Icons.Material.Filled.Upload;
+                TaggingUploadBtnColor = Color.Secondary;
+            }
+        }
+        catch (Exception ex)
+        {
+            LogToConsole("Database not found!");
+            throw;
+        }
+    }
+    public void CheckSalesData()
+    {
+        try
+        {
+            if (LiteDbService.GetRecipes().Any())
+            {
+                _hasSalesData = true;
+                SalesDataUploadBtnIcon = Icons.Material.Filled.Refresh;
+                SalesDataUploadBtnColor = Color.Success;
+            }
+            else
+            {
+                _hasSalesData = false;
+                SalesDataUploadBtnIcon = Icons.Material.Filled.Upload;
+                SalesDataUploadBtnColor = Color.Secondary;
+            }
+        }
+        catch (Exception ex)
+        {
+            LogToConsole("Database not found!");
+            throw;
+        }
+    }
+
+    public void CheckAllData()
+    {
+        CheckRecipesData();
+        CheckTaggingData();
+        CheckSalesData();
     }
 
     public void DisableAllBtn()
@@ -441,39 +533,64 @@
         _canExplode = true;
     }
 
+    public string FormatDateTime(DateTime dateTime)
+    {
+        return dateTime > DateTime.MinValue ? dateTime.ToString("g") : "N/A";
+    }
+
+    public string FormatDateOnly(DateOnly dateOnly)
+    {
+        return dateOnly > DateOnly.MinValue ? dateOnly.ToString("dd-MM-yyyy") : "N/A";
+    }
+
     public bool HasPurgables()
     {
-        if (LiteDbService.GetRecipes().Any() || LiteDbService.GetPosBomTaggings().Any() || DagTree.Any())
+        if (LiteDbService.GetRecipes().Any() || LiteDbService.GetPosBomTaggings().Any() || LiteDbService.GetSalesData().Any() || LiteDbService.GetMetaData() is not null)
         {
             return true;
         }
         return false;
     }
+
+    public bool AreDatasetsComplete()
+    {
+        // Neet to check DAG upon startup
+        return LiteDbService.GetRecipes().Any() || LiteDbService.GetPosBomTaggings().Any() || LiteDbService.GetSalesData().Any();
+    }
     
-    public void PurgeAllData()
+    public async Task PurgeAllData()
     {
         LogToConsole("Purging started...");
-        LogToConsole("Purging all dummy data");
-        LiteDbService.PurgeDummyData();
-        _hasRecipesData = false;
-        LogToConsole("Purging of all dummy data completed");
         
         LogToConsole("Purging all recipes...");
         LiteDbService.PurgeRecipes();
-        _hasSalesData = false;
-        LogToConsole("Purging of all recipes completed");
+        _hasRecipesData = false;
+        LogToConsole("Purging of all recipes completed.");
         
         LogToConsole("Purging all POS tagging...");
         LiteDbService.PurgePosBomTaggings();
         _hasTagging = false;
-        LogToConsole("Purging of all POS tagging completed");
+        LogToConsole("Purging of all POS tagging completed.");
+        
+        LogToConsole("Purging all Sales data...");
+        LiteDbService.PurgeSalesData();
+        _hasSalesData = false;
+        LogToConsole("Purging of all sales data completed.");
+        
+        LogToConsole("Puring Metadata...");
+        LiteDbService.PurgeMetaData();
+        _hasMetaData = false;
+        LogToConsole("Puring MetaData completed.");
+        
         LogToConsole("Purged the entire database.");
         
         LogToConsole("Clearing memory datastructures...");
         DagTree.Clear();
         LogToConsole("Memory datastructures cleared!");
         _canExplode = false;
-
+        LogToConsole("Reinitializing Metadata...");
+        await InitializeMetaDataAsync();
+        CheckAllData();
     }
     
     // public async Task UploadDummyDataAsync(IBrowserFile files)
