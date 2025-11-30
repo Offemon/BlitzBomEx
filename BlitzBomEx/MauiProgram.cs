@@ -6,10 +6,6 @@ namespace BlitzBomEx;
 
 public static class MauiProgram
 {
-    // static MauiProgram()
-    // {
-    //     AppContext.SetSwitch("BlazorWebView.AppHostAddressAlways0000", true);
-    // }
     public static MauiApp CreateMauiApp()
     {
         var builder = MauiApp.CreateBuilder();
@@ -20,11 +16,11 @@ public static class MauiProgram
         builder.Services.AddMauiBlazorWebView();
         builder.Services.AddMudServices();
         builder.Services.AddSingleton(new LiteDbService("BlitzBomEx.db"));
-
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();
         builder.Logging.AddDebug();
 #endif
+
 
         return builder.Build();
     }

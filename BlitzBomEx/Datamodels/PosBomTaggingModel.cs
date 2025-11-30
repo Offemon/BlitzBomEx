@@ -11,4 +11,6 @@ public class PosBomTaggingModel
     public required decimal PaperCost { get; set; }
     public required decimal MarginOfError { get; set; }
     public required decimal CostOfGoods { get; set; }
+    public required string BlitzId { get; set; }
+    public required string BrandPosCode { get; set; }
 }

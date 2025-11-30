@@ -16,4 +16,7 @@ public class RecipeModel
     public required string UnitUom { get; set; }    
     public required decimal CostPerUnit  { get; set; }
     public required string BrandCode { get; set; }
+    public required string GenericDescription { get; set; }
+    public required string BlitzId { get; set; }
+    public required string ComponentBlitzId { get; set; }
 }

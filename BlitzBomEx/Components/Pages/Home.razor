@@ -1,5 +1,6 @@
 ﻿@page "/"
 @using ClosedXML.Excel
+@using LiteDB
 @inject LiteDbService LiteDbService
 
 <MudStack>
@@ -39,7 +40,7 @@
                             <MudButton Variant="Variant.Filled"
                                        Color="@RecipeUploadBtnColor"
                                        StartIcon="@RecipeUploadBtnIcon">
-                                @(_hasRecipesData ? "Update":"Import")
+                                @(_hasRecipesData ? "Replace":"Import")
                             </MudButton>
                         </ActivatorContent>
                     </MudFileUpload>
@@ -72,13 +73,13 @@
                 <td>
                     <MudFileUpload
                         T="IBrowserFile"
-                        FilesChanged="UploadTagging"
+                        FilesChanged="UploadTaggingAsync"
                         Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
                         <ActivatorContent>
                             <MudButton Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       StartIcon="@Icons.Material.Filled.FileUpload">
-                                Import
+                                       Color="@TaggingUploadBtnColor"
+                                       StartIcon="@TaggingUploadBtnIcon">
+                                @(_hasTagging ? "Replace":"Import")
                             </MudButton>
                         </ActivatorContent>
                     </MudFileUpload>
@@ -111,13 +112,13 @@
                 <td>
                     <MudFileUpload
                         T="IBrowserFile"
-                        FilesChanged="UploadSalesData"
+                        FilesChanged="UploadSalesDataAsync"
                         Accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
                         <ActivatorContent>
                             <MudButton Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       StartIcon="@Icons.Material.Filled.FileUpload">
-                                Import
+                                       Color="@SalesDataUploadBtnColor"
+                                       StartIcon="@SalesDataUploadBtnIcon">
+                                @(_hasSalesData ? "Replace":"Import")
                             </MudButton>
                         </ActivatorContent>
                     </MudFileUpload>
@@ -140,7 +141,7 @@
                     }
                 </td>
                 <td>
-                    -
+                    @SalesStartDate - @SalesEndDate
                 </td>
             </tr>
             </tbody>
@@ -179,6 +180,7 @@
     public List<RecipeModel>? Recipes { get; set; }
     public List<AssembledComponentModel>? AsmComponents { get; set; }
     public List<PosBomTaggingModel>? Taggings { get; set; }
+    public List<SalesDataModel>? Sales { get; set; }
     public string LogText = "Console ready...";
     // private bool _hasDummyData;
     private bool _hasMetaData;
@@ -212,13 +214,36 @@
     
     protected override async Task OnInitializedAsync()
     {
-        Console.WriteLine("OnInitialized");
-        await InitializeMetaDataAsync();
-        await Task.Run(() =>
+        // Console.WriteLine("OnInitialized");
+        // await Task.Run(() =>
+        // {
+        // });
+        try
+        {
+            InitializeMetaData();
+        }
+        catch (Exception ex)
+        {
+            LogToConsole($"Error: {ex.Message}");
+        }
+        try
         {
             CheckAllData();
-        });
-        _canPurge = HasPurgables();
+        }
+        catch (Exception ex)
+        {
+            LogToConsole($"Error: {ex.Message}");
+        }
+        try
+        {
+            _canPurge = HasPurgables();
+        }
+        catch (Exception ex)
+        {
+            LogToConsole($"Purgables initialization error: {ex.Message}");
+        }
+            
+        
         await base.OnInitializedAsync();
     }
     
@@ -275,19 +300,20 @@
 
             for (int r = 0; r < dataRows; r++)
             {
-                string classification = xlsxContent[r].Cell(9).GetString();
-                string componentName = xlsxContent[r].Cell(8).GetString();
-                string brandCode = xlsxContent[r].Cell(20).GetString();
-                if (classification=="SUB RECIPE" || classification == "FINISHED GOODS")
-                {
-                    componentName = $"{brandCode} - {componentName}";
-                }
+                //Insert validation logic here
+                // string classification = xlsxContent[r].Cell(9).GetString();
+                // string componentName = xlsxContent[r].Cell(8).GetString();
+                // string brandCode = xlsxContent[r].Cell(20).GetString();
+                // if (classification=="SUB RECIPE" || classification == "FINISHED GOODS")
+                // {
+                //     componentName = $"{brandCode} - {componentName}";
+                // }
                 var data = new RecipeModel()
                 {
                     BrandRecipeName = xlsxContent[r].Cell(2).GetString(),
                     RecipeName = xlsxContent[r].Cell(4).GetString(),
-                    ComponentName = componentName,
-                    Classification = classification,
+                    ComponentName = xlsxContent[r].Cell(8).GetString(),
+                    Classification = xlsxContent[r].Cell(9).GetString(),
                     GeneralClassification = xlsxContent[r].Cell(17).GetString(),
                     ContentQty = xlsxContent[r].Cell(10).GetValue<decimal>(),
                     WholeCost = xlsxContent[r].Cell(10).GetValue<decimal>(),
@@ -295,45 +321,36 @@
                     UnitQty = xlsxContent[r].Cell(13).GetValue<decimal>(),
                     UnitUom = xlsxContent[r].Cell(14).GetString(),
                     CostPerUnit = xlsxContent[r].Cell(15).GetValue<decimal>(),
-                    BrandCode = brandCode
+                    BrandCode = xlsxContent[r].Cell(20).GetString(),
+                    GenericDescription = xlsxContent[r].Cell(21).GetString(),
+                    BlitzId = xlsxContent[r].Cell(22).GetString(),
+                    ComponentBlitzId = xlsxContent[r].Cell(23).GetString()
                 };
                 recipeDataList.Add(data);
             }
             LogToConsole("Data mapping completed.");
             // start of DAG creation
             LogToConsole("Starting DAG Creation...");
-            var dag = recipeDataList
-                .GroupBy(r => r.BrandRecipeName)
-                .ToDictionary(
-                    g => g.Key,
-                    g=>g
-                        .GroupBy(r=>r.ComponentName)
-                        .Select(grp =>
-                        {
-                            var first = grp.First();
-                            return new ComponentModel
-                            {
-                                ComponentName = grp.Key,
-                                Classification = first.Classification,
-                                ContentQty = first.ContentQty,
-                                WholeCost = first.WholeCost,
-                                WholeUom = first.WholeUom,
-                                UnitQty = grp.Sum(r => r.UnitQty),
-                                UnitUom = first.UnitUom,
-                                CostPerUnit = first.CostPerUnit,
-                                BrandCode = first.BrandCode
-                            };
-                        })
-                        .ToList()
-                    );
+            DagTree = GenerateDag(recipeDataList);
             // end of DAG creation
             LogToConsole($"DAG creation completed.");
-            LogToConsole($"{dag.Count} recipes detected from uploaded file.");
+            LogToConsole($"{DagTree.Count} recipes detected from uploaded file.");
             LogToConsole($"Saving recipes to the database.");
             LiteDbService.AddRecipe(recipeDataList);
             CheckRecipesData();
-            LogToConsole("File Successfully saved.");
+            LogToConsole("Data Successfully saved.");
+            BomDate = FormatDateTime(DateTime.Now);
             _canPurge = HasPurgables();
+            try
+            {
+                DataStatus.BomUpdateDate = DateTime.Now;
+                LiteDbService.UpdateMetaData(DataStatus);
+            }
+            catch (Exception ex)
+            {
+                LogToConsole($"Error: {ex.Message}");
+                throw ex;
+            }
             // try
             // {
             //     DataStatus.BomUpdateDate = DateTime.Now;
@@ -355,7 +372,7 @@
         }
     }
     
-    public async Task UploadTagging(IBrowserFile xlsxfile)
+    public async Task UploadTaggingAsync(IBrowserFile xlsxfile)
     {
         try
         {
@@ -367,70 +384,239 @@
             await stream.CopyToAsync(memoryStream);
             memoryStream.Position = 0;
             LogToConsole($"Finished reading {file.Name}.");
-            LogToConsole($"Saving contents of {file.Name}.");
             try
             {
-                await Task.Run(() =>
-                {
-                    SaveTaggingData(memoryStream);
-                });
+                LogToConsole($"Saving contents of {file.Name}.");
+                SaveTaggingData(memoryStream);
+
             }
             catch (Exception ex)
             {
                 LogToConsole($"Failed to save contents of {file.Name} to the database");
+                LogToConsole($"Error: {ex.Message}");
                 throw;
             }
         }
         catch (Exception ex)
         {
             LogToConsole("Failed to read Sales Tagging data...");
+            LogToConsole($"Error: {ex.Message}");
+            throw;
         }
         _isLoadingTagging = false;
     }
 
     public void SaveTaggingData(Stream excelStream)
     {
-        
-    }
+        try
+        {
+            LogToConsole("Purging existing Tagging data...");
+            LiteDbService.PurgePosBomTaggings();
+            LogToConsole("Purging existing Tagging data completed.");
+            LogToConsole("Preparing xlsx data for database...");
+            using var workbook = new XLWorkbook(excelStream);
+            var worksheet = workbook.Worksheets.First();
+            int totalRows = worksheet.RowsUsed().Count();
+            var salesTaggingList = new List<PosBomTaggingModel>();
+            var xlsxContent = worksheet.RowsUsed().Skip(1).ToList();
+            int dataRows = xlsxContent.Count;
+            LogToConsole($"Detected {dataRows} entries.");
+            LogToConsole($"Mapping data to data model.");
+            for (int r = 0; r < dataRows; r++)
+            {
+                //Insert validation logic here
+                var data = new PosBomTaggingModel()
+                {
+                    BrandInitial = xlsxContent[r].Cell(1).GetValue<string>(),
+                    PosItemCode = xlsxContent[r].Cell(2).GetValue<string>(),
+                    PosItemName = xlsxContent[r].Cell(3).GetValue<string>(),
+                    SearchKey = xlsxContent[r].Cell(4).GetValue<string>(),
+                    BomRecipeName = xlsxContent[r].Cell(5).GetValue<string>(),
+                    FoodCost = xlsxContent[r].Cell(6).GetValue<decimal>(),
+                    PaperCost = xlsxContent[r].Cell(7).GetValue<decimal>(),
+                    MarginOfError = xlsxContent[r].Cell(8).GetValue<decimal>(),
+                    CostOfGoods = xlsxContent[r].Cell(9).GetValue<decimal>(),
+                    BlitzId = xlsxContent[r].Cell(10).GetValue<string>(),
+                    BrandPosCode = xlsxContent[r].Cell(11).GetValue<string>()
+                };
+                salesTaggingList.Add(data);
+            }
+            LogToConsole($"{salesTaggingList.Count} tagging data detected.");
+            LogToConsole("Saving tagging to database...");
+            LiteDbService.AddPosBomTagging(salesTaggingList);
+            LogToConsole("Data successfully saved");
+            TaggingDate = FormatDateTime(DateTime.Now);
+            CheckTaggingData();
+            _canPurge = HasPurgables();
+            try
+            {
+                DataStatus.TaggingUpdateDate = DateTime.Now;
+                LiteDbService.UpdateMetaData(DataStatus);
+            }
+            catch (Exception ex)
+            {
+                LogToConsole($"Error: {ex.Message}");
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            
+            throw;
+        }
+}
 
-    public void UploadSalesData()
-    {
-        
-    }
-
-    public async Task InitializeMetaDataAsync()
+    public async Task UploadSalesDataAsync(IBrowserFile xlsxfile)
     {
         try
         {
-            DataStatus = await Task.Run(() =>
+            _isLoadingSalesData = true;
+            var file = xlsxfile;
+            LogToConsole($"Reading {file.Name}.");
+            using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            memoryStream.Position = 0;
+            LogToConsole($"Finished reading {file.Name}.");
+            try
             {
-                var meta = LiteDbService.GetMetaData();
-                LogToConsole("Checking Metadata...");
-                if (meta is null)
+                LogToConsole($"Saving contents of {file.Name}.");
+                await Task.Run(() =>
                 {
+                    SaveSalesData(memoryStream);
+                });
+
+            }
+            catch (Exception ex)
+            {
+                LogToConsole($"Failed to save contents of {file.Name} to the database");
+                LogToConsole($"Error: {ex.Message}");
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            LogToConsole("Failed to read Sales data...");
+            LogToConsole($"Error: {ex.Message}");
+            throw;
+        }
+        _isLoadingSalesData = false;
+    }
+
+    public void SaveSalesData(Stream excelStream)
+    {
+        try
+        {
+            LogToConsole("Purging existing Sales data...");
+            LiteDbService.PurgeSalesData();
+            LogToConsole("Purging existing Sales data completed.");
+            LogToConsole("Preparing xlsx data for database...");
+            using var workbook = new XLWorkbook(excelStream);
+            var worksheet = workbook.Worksheets.First();
+            var salesEntryList = new List<SalesDataModel>();
+            var xlsxContent = worksheet.RowsUsed().Skip(2).ToList();
+            int dataRows = xlsxContent.Count;
+            DateTime? sdt = null;
+            DateTime? edt = null;
+            LogToConsole($"Detected {dataRows} sales entries.");
+            LogToConsole("Mapping data to data model.");
+            try
+            {
+                for (int r = 0; r < dataRows; r++)
+                {
+                    var extractedDate = DateTime.FromOADate(xlsxContent[r].Cell(5).GetValue<double>());
+                    if (sdt is null)
+                    {
+                        sdt = extractedDate;
+                    }
+                    else if (sdt > extractedDate)
+                    {
+                        sdt = extractedDate;
+                    }
+                    if (edt is null)
+                    {
+                        edt = extractedDate;
+                    }
+                    else if (edt < extractedDate)
+                    {
+                        edt = extractedDate;
+                    }
+                //Insert validation logic here
+                    var data = new SalesDataModel()
+                    {
+                        StoreCode = xlsxContent[r].Cell(1).GetString(),
+                        StoreName = xlsxContent[r].Cell(2).GetString(),
+                        BrandCode = xlsxContent[r].Cell(3).GetString(),
+                        BrandPosCode = xlsxContent[r].Cell(4).GetString(),
+                        SalesDateTime = extractedDate,
+                        SalesPosCode = xlsxContent[r].Cell(6).GetString(),
+                        SalesItemName = xlsxContent[r].Cell(7).GetString(),
+                        SalesQuantity = xlsxContent[r].Cell(8).GetValue<int>()
+                    };
+                    salesEntryList.Add(data);
+                }
+            }
+            catch (Exception ex)
+            {
+               LogToConsole($"Error: {ex.Message}"); 
+            }
+            LogToConsole($"{salesEntryList.Count} sales data detected.");
+            LogToConsole("Saving sales data to database...");
+            LiteDbService.AddSalesData(salesEntryList);
+            LogToConsole("Data successfully saved");
+            SalesStartDate = FormatDateTime(sdt,false);
+            SalesEndDate = FormatDateTime(edt,false);
+            CheckSalesData();
+            _canPurge = HasPurgables();
+            try
+            {
+                DataStatus.SalesUpdateDate = DateTime.Now;
+                DataStatus.SalesStartDate = sdt;
+                DataStatus.SalesEndDate = edt;
+                LiteDbService.UpdateMetaData(DataStatus);
+            }
+            catch (Exception ex)
+            {
+                LogToConsole($"Error: {ex.Message}");
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            LogToConsole($"Error: {ex.Message}");
+            throw;
+        }
+    }
+    
+    public void InitializeMetaData()
+    {
+        try
+        {
+            LogToConsole("Checking Metadata...");
+            DataStatus = LiteDbService.GetMetaData();
+            if (DataStatus is null)
+            {
                     LogToConsole("Metadata not found");
                     LogToConsole("Initializing Metadata...");
-                    meta = new MetaDataModel();
-                    LiteDbService.CreateMetaData(meta);
+                    DataStatus = new MetaDataModel();
+                    LiteDbService.UpdateMetaData(DataStatus);
                     LogToConsole("Metadata created.");
-                }
-                LogToConsole("Loading Metadata...");
-                return meta;
-            });
+            }
             _hasMetaData = true;
             BomDate = FormatDateTime(DataStatus.BomUpdateDate);
             TaggingDate = FormatDateTime(DataStatus.TaggingUpdateDate);
             SalesUpdateDate = FormatDateTime(DataStatus.SalesUpdateDate);
-            SalesStartDate = FormatDateOnly(DataStatus.SalesStartDate);
-            SalesEndDate = FormatDateOnly(DataStatus.SalesEndDate);
+            SalesStartDate = FormatDateTime(DataStatus.SalesStartDate,false);
+            SalesEndDate = FormatDateTime(DataStatus.SalesEndDate,false);
             LogToConsole("Metadata loaded!");
         }
         catch (Exception ex)
         {
-            LogToConsole($"Failed to access database: {ex.Message}");
+            LogToConsole($"Metadata initialization failed: {ex.Message}");
             throw;
         }
     }
+    
     public void Explode()
     {
         
@@ -443,10 +629,16 @@
 
     public void CheckRecipesData()
     {
+        LogToConsole("Checking recipes in database...");
         try
         {
-            if (LiteDbService.GetRecipes().Any())
+            var recipes = LiteDbService.GetRecipes();
+            if (recipes.Any())
             {
+                LogToConsole("Recipes found in database.");
+                LogToConsole("Generating recipe nodes...");
+                DagTree = GenerateDag(recipes);
+                LogToConsole($"{DagTree.Count} recipe nodes generated.");
                 _hasRecipesData = true;
                 RecipeUploadBtnIcon = Icons.Material.Filled.Refresh;
                 RecipeUploadBtnColor = Color.Success;
@@ -454,6 +646,7 @@
             }
             else
             {
+                LogToConsole("Recipes not found in database.");
                 _hasRecipesData = false;
                 RecipeUploadBtnIcon = Icons.Material.Filled.Upload;
                 RecipeUploadBtnColor = Color.Secondary;
@@ -465,18 +658,25 @@
             throw;
         }
     }
+    
     public void CheckTaggingData()
     {
+        LogToConsole("Checking tagging data in database...");
         try
         {
-            if (LiteDbService.GetRecipes().Any())
+            var tagging = LiteDbService.GetPosBomTaggings();
+            if (tagging.Any())
             {
+                LogToConsole($"{tagging.Count} tagging data found in database.");
+                Taggings = tagging;
+                LogToConsole("Tagging data loaded to memory.");
                 _hasTagging = true;
                 TaggingUploadBtnIcon = Icons.Material.Filled.Refresh;
                 TaggingUploadBtnColor = Color.Success;
             }
             else
             {
+                LogToConsole("Tagging not found in database.");
                 _hasTagging = false;
                 TaggingUploadBtnIcon = Icons.Material.Filled.Upload;
                 TaggingUploadBtnColor = Color.Secondary;
@@ -488,18 +688,24 @@
             throw;
         }
     }
+    
     public void CheckSalesData()
     {
+        LogToConsole("Checking sales data in database...");
         try
         {
-            if (LiteDbService.GetRecipes().Any())
+            var salesEntries = LiteDbService.GetSalesData();
+            if (salesEntries.Any())
             {
+                LogToConsole($"{salesEntries.Count} sales data found in database.");
+                Sales = salesEntries;
                 _hasSalesData = true;
                 SalesDataUploadBtnIcon = Icons.Material.Filled.Refresh;
                 SalesDataUploadBtnColor = Color.Success;
             }
             else
             {
+                LogToConsole("Sales data not found in database.");
                 _hasSalesData = false;
                 SalesDataUploadBtnIcon = Icons.Material.Filled.Upload;
                 SalesDataUploadBtnColor = Color.Secondary;
@@ -517,6 +723,14 @@
         CheckRecipesData();
         CheckTaggingData();
         CheckSalesData();
+        if (_hasRecipesData && _hasTagging && _hasSalesData)
+        {
+            _canExplode = true;
+        }
+        else
+        {
+            _canExplode = false;
+        }
     }
 
     public void DisableAllBtn()
@@ -533,32 +747,72 @@
         _canExplode = true;
     }
 
-    public string FormatDateTime(DateTime dateTime)
+    public string FormatDateTime(DateTime? dateTime)
     {
-        return dateTime > DateTime.MinValue ? dateTime.ToString("g") : "N/A";
+        // return dateTime > DateTime.MinValue ? dateTime.ToString("g") : "N/A";
+        return dateTime.HasValue ? dateTime.Value.ToString("g") : "N/A";
+    }
+    
+    public string FormatDateTime(DateTime? dateTime, bool showTime)
+    {
+        // return dateTime > DateTime.MinValue ? dateTime.ToString("g") : "N/A";
+        if(showTime)
+            return dateTime.HasValue ? dateTime.Value.ToString("g") : "N/A";
+        return dateTime.HasValue ? dateTime.Value.ToString("D") : "N/A";
     }
 
-    public string FormatDateOnly(DateOnly dateOnly)
+    public string FormatDateOnly(DateOnly? dateOnly)
     {
-        return dateOnly > DateOnly.MinValue ? dateOnly.ToString("dd-MM-yyyy") : "N/A";
+        // return dateOnly > DateOnly.MinValue ? dateOnly.ToString("dd-MM-yyyy") : "N/A";
+        return dateOnly.HasValue ? dateOnly.Value.ToString("dd-MM-yyyy") : "N/A";
     }
 
     public bool HasPurgables()
     {
-        if (LiteDbService.GetRecipes().Any() || LiteDbService.GetPosBomTaggings().Any() || LiteDbService.GetSalesData().Any() || LiteDbService.GetMetaData() is not null)
+        try
         {
-            return true;
+            if (LiteDbService.GetRecipes().Any() || LiteDbService.GetPosBomTaggings().Any() || LiteDbService.GetSalesData().Any() || LiteDbService.GetMetaData() is not null)
+            {
+                return true;
+            }
+            return false;
         }
-        return false;
+        catch (Exception ex)
+        {
+            LogToConsole("Has Purgables set to fales. Connection to database failed.");
+            return false;
+        }
     }
 
-    public bool AreDatasetsComplete()
+    public Dictionary<string, List<ComponentModel>> GenerateDag(List<RecipeModel> recipes)
     {
-        // Neet to check DAG upon startup
-        return LiteDbService.GetRecipes().Any() || LiteDbService.GetPosBomTaggings().Any() || LiteDbService.GetSalesData().Any();
+        return recipes.GroupBy(r => r.BlitzId)
+            .ToDictionary(
+                g => g.Key,
+                g=>g
+                    .GroupBy(r=>r.ComponentBlitzId)
+                    .Select(grp =>
+                    {
+                        var first = grp.First();
+                        return new ComponentModel
+                        {
+                            ComponentName = grp.Key,
+                            Classification = first.Classification,
+                            ContentQty = first.ContentQty,
+                            WholeCost = first.WholeCost,
+                            WholeUom = first.WholeUom,
+                            UnitQty = grp.Sum(r => r.UnitQty),
+                            UnitUom = first.UnitUom,
+                            CostPerUnit = first.CostPerUnit,
+                            BrandCode = first.BrandCode
+                        };
+                    })
+                    .ToList()
+            );
+        
     }
     
-    public async Task PurgeAllData()
+    public void PurgeAllData()
     {
         LogToConsole("Purging started...");
         
@@ -589,7 +843,7 @@
         LogToConsole("Memory datastructures cleared!");
         _canExplode = false;
         LogToConsole("Reinitializing Metadata...");
-        await InitializeMetaDataAsync();
+        InitializeMetaData();
         CheckAllData();
     }
     
