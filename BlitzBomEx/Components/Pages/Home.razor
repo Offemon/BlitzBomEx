@@ -152,6 +152,7 @@
             Color="Color.Warning"
             StartIcon="@Icons.Material.Filled.AutoAwesome"
             Disabled="@(!_canExplode)"
+            @onclick="Explode"
             Size="Size.Large">
             Explode
         </MudButton>
@@ -166,12 +167,30 @@
             Purge Collections
         </MudButton>
     </MudPaper>
-    <MudTextField @bind-Value="LogText"
-                  Lines="10"
-                  Variant="Variant.Filled"
-                  Class="font-mono text-green-300 bg-gray-950"
-                  FullWidth="true"
-                  ReadOnly="true"/>
+    @if (_isExploding)
+    {
+        <MudCard>
+            <MudStack Class="d-flex align-center justify-center">
+                <MudProgressCircular Color="Color.Primary" Style="height:70px;width:70px;" Indeterminate="true"/>
+                <MudText>Calculating...</MudText>
+            </MudStack>
+        </MudCard>
+    }
+    else
+    {
+        <MudTextField @bind-Value="LogText"
+                      Lines="10"
+                      Variant="Variant.Filled"
+                      Class="font-mono text-green-300 bg-gray-950"
+                      FullWidth="true"
+                      ReadOnly="true"/>
+    }
+        @* <MudTextField @bind-Value="LogText" *@
+        @*               Lines="10" *@
+        @*               Variant="Variant.Filled" *@
+        @*               Class="font-mono text-green-300 bg-gray-950" *@
+        @*               FullWidth="true" *@
+        @*               ReadOnly="true"/> *@
 </MudStack>
 
 
@@ -202,6 +221,8 @@
     
     private bool _isEnabled = true;
     private bool _canExplode;
+    private bool _isExploding;
+    private double _progressValue = 0d;
     private bool _canPurge;
     private string? BomDate { get; set; } = "N/A";
     private string? TaggingDate { get; set; } = "N/A";
@@ -211,13 +232,11 @@
     private MetaDataModel? DataStatus { get; set; }
     public BlitzEngine Blitz = new BlitzEngine();
     public Dictionary<string, List<ComponentModel>> DagTree = new Dictionary<string, List<ComponentModel>>();
-    
+    public List<RecipeNodeModel>? RecipeNodes { get; set; }
+    public List<SalesGroupModel>? SalesEntities { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
-        // Console.WriteLine("OnInitialized");
-        // await Task.Run(() =>
-        // {
-        // });
         try
         {
             InitializeMetaData();
@@ -293,7 +312,7 @@
             int totalRows = worksheet.RowsUsed().Count();
             // int dataRows = Math.Max(0, totalRows - 1);
             var recipeDataList = new List<RecipeModel>();
-            var xlsxContent = worksheet.RowsUsed().Skip(1).ToList();
+            var xlsxContent = worksheet.RowsUsed().Skip(2).ToList();
             int dataRows = xlsxContent.Count;
             LogToConsole($"Detected {dataRows} entries.");
             LogToConsole($"Mapping data to data model.");
@@ -301,13 +320,6 @@
             for (int r = 0; r < dataRows; r++)
             {
                 //Insert validation logic here
-                // string classification = xlsxContent[r].Cell(9).GetString();
-                // string componentName = xlsxContent[r].Cell(8).GetString();
-                // string brandCode = xlsxContent[r].Cell(20).GetString();
-                // if (classification=="SUB RECIPE" || classification == "FINISHED GOODS")
-                // {
-                //     componentName = $"{brandCode} - {componentName}";
-                // }
                 var data = new RecipeModel()
                 {
                     BrandRecipeName = xlsxContent[r].Cell(2).GetString(),
@@ -331,7 +343,8 @@
             LogToConsole("Data mapping completed.");
             // start of DAG creation
             LogToConsole("Starting DAG Creation...");
-            DagTree = GenerateDag(recipeDataList);
+            // DagTree = GenerateDag(recipeDataList);
+            RecipeNodes = GenerateRecipeNodes(recipeDataList);
             // end of DAG creation
             LogToConsole($"DAG creation completed.");
             LogToConsole($"{DagTree.Count} recipes detected from uploaded file.");
@@ -351,20 +364,6 @@
                 LogToConsole($"Error: {ex.Message}");
                 throw ex;
             }
-            // try
-            // {
-            //     DataStatus.BomUpdateDate = DateTime.Now;
-            //     DataStatus.BomVersion = Convert.ToBase64String(Guid.NewGuid().ToByteArray())
-            //         .Replace("/", "_")
-            //         .Replace("+", "-")
-            //         .Substring(0,15);
-            //     InsertMetaData();
-            // }
-            // catch (Exception ex)
-            // {
-            //     
-            // }
-
         }
         catch (Exception ex)
         {
@@ -564,6 +563,17 @@
             LogToConsole("Saving sales data to database...");
             LiteDbService.AddSalesData(salesEntryList);
             LogToConsole("Data successfully saved");
+            try
+            {
+                LogToConsole("Generating sales entities");
+                SalesEntities = GenerateSalesGroup(salesEntryList);
+                LogToConsole($"Success: Generated {SalesEntities.Count} Sales Entities");
+            }
+            catch (Exception ex)
+            {
+                LogToConsole($"Error: {ex.Message}");
+                throw;
+            }
             SalesStartDate = FormatDateTime(sdt,false);
             SalesEndDate = FormatDateTime(edt,false);
             CheckSalesData();
@@ -617,9 +627,251 @@
         }
     }
     
-    public void Explode()
+    public async Task Explode()
     {
-        
+        var saleEntityListSS = SalesEntities.ToList();
+        var tagListSS = Taggings.ToList();
+        var recipeNodeSS = RecipeNodes.ToList();
+        _isExploding = true;
+        LogToConsole("Exploding...");
+        LogToConsole($"{Recipes.Count}");
+        // await Task.Run(() =>
+        // {
+        //     foreach (var rec in recipeNodeSS)
+        //     {
+        //         // LogToConsole($"{rec.BlitzId} - {rec.BrandRecipeName}");
+        //         foreach (var component in rec.Components)
+        //         {
+        //             // LogToConsole($"{component.BlitzId} - {component.ComponentBlitzId}");
+        //             try
+        //             {
+        //                 LogToConsole($"{recipeNodeSS.Find(rn => rn.BlitzId == component.ComponentBlitzId)?.BlitzId}");
+        //             }
+        //             catch (Exception ex)
+        //             {
+        //                 LogToConsole($"{ex.Message}");
+        //                 throw;
+        //             }
+        //             
+        //         }
+        //     }
+        // });
+        List<ExplosionResultModel> ExplosionResultEntities = new List<ExplosionResultModel>();
+        await Task.Run(() =>
+        {
+            LogToConsole($"Tags count: {tagListSS.Count}");
+            LogToConsole($"Sales count: {saleEntityListSS.Count}");
+            LogToConsole($"Recipe count: {recipeNodeSS.Count}");
+            int salesEntityCount = saleEntityListSS.Count;
+            //salesEntityCount
+            // foreach (var tag in tagListSS)
+            // {
+            //     // LogToConsole($"{tag.BlitzId} - {tag.BomRecipeName} - {tag.BrandPosCode}");
+            //     LogToConsole($"{tagListSS.Find(t => t.BrandPosCode == tag.BrandPosCode)?.BlitzId}");
+            //     salesEntityCount
+            // }
+            // LogToConsole($"saleEntityListSS Count: {saleEntityListSS.Count}");
+            for (int e = 0; e < saleEntityListSS.Count; e++)
+            {
+                // _progressValue = (e+1)/saleEntityListSS.Count;
+                var salesentity = saleEntityListSS[e];
+                LogToConsole($"Entry Number: {e+1}");
+                string? MRepBlitzID = tagListSS.Find(t => t.BrandPosCode == salesentity.BrandPosCode)?.BlitzId;
+                if (string.IsNullOrEmpty(MRepBlitzID))
+                {
+                    // LogToConsole($"{salesentity.PosItemDescription} - {salesentity.BrandPosCode} has no bom.");
+                    continue;
+                }
+                RecipeNodeModel Recipe = recipeNodeSS.Find(r => r.BlitzId == MRepBlitzID);
+                if (Recipe is null)
+                {
+                    // LogToConsole($"{MRepBlitzID} - {salesentity.PosItemDescription} is a retail item");
+                    continue;
+                }
+                // LogToConsole($"Blitz ID: {Recipe.BlitzId}");
+                List<ComponentModel> extractedComponents = new List<ComponentModel>();
+                try
+                {
+                    // LogToConsole($"Extracting: [{salesentity.SalesQty}] {Recipe.BrandRecipeName}");
+                    extractedComponents = ExtractRawMats(recipeNodeSS,Recipe, salesentity.SalesQty);
+                }
+                catch (Exception ex)
+                {
+                    _isExploding = false;
+                    LogToConsole($"Error: {ex.Message}");
+                    throw;
+                }
+                foreach (var comp in extractedComponents)
+                {
+                    try
+                    {
+                        var expRes = new ExplosionResultModel()
+                        {
+                            BrandCode = salesentity.BrandCode,
+                            StoreCode = salesentity.StoreCode,
+                            StoreName = salesentity.StoreName,
+                            PosSalesCode = salesentity.PosCode,
+                            PosSalesName = salesentity.PosItemDescription,
+                            SalesQuantity = salesentity.SalesQty,
+                            ComponentItemCode = comp.ComponentBlitzId,
+                            ComponentItemDesc = comp.ComponentName,
+                            ComponentContentQty = comp.ContentQty,
+                            ComponentWholeUom = comp.WholeUom,
+                            ComponentWholeCost = comp.WholeCost,
+                            ComponentUnitQty = comp.UnitQty,
+                            ComponentUnitCost = comp.CostPerUnit,
+                            ComponentTotalUnitQty = comp.TotalUnitQty,
+                            ComponentTotalUnitCost = comp.TotalUnitQty * comp.CostPerUnit,
+                            TotalWholeUomConsumed = comp.TotalUnitQty / comp.ContentQty,
+                            TotalWholeCost = (comp.TotalUnitQty / comp.ContentQty) * comp.WholeCost,
+                        };
+                        ExplosionResultEntities.Add(expRes);
+                    }
+                    catch(Exception ex)
+                    {
+                        LogToConsole($"Error: {ex.Message}");
+                    }
+                }
+            }
+        });
+        _isExploding = false;
+        LogToConsole("Explosion completed");
+        LogToConsole("Exporting data...");
+        try
+        {
+            ExportExplosionResults(ExplosionResultEntities);
+            LogToConsole("Data Exported!");
+        }
+        catch (Exception ex)
+        {
+            LogToConsole($"Failed to Export: {ex.Message}");
+            throw;
+        }
+    }
+    
+    public List<ComponentModel> ExtractRawMats(List<RecipeNodeModel> recipeListSS,RecipeNodeModel asmComp, decimal qty)
+    {
+        // LogToConsole($"{asmComp.BrandRecipeName} has {asmComp.Components.Count} components");
+        List<ComponentModel> components = new List<ComponentModel>();
+        foreach (var component in asmComp.Components)
+        {
+            if (component.ContentQty == 0)
+            {
+                // LogToConsole($"{component.ComponentName} - {component.ContentQty}");
+                continue;
+            }
+            var Recipe = recipeListSS.Find(rn => rn.BlitzId == component.ComponentBlitzId);
+            if (Recipe is not null)
+            {
+            // LogToConsole($"{Recipe.BrandRecipeName} - {Recipe.BlitzId}");
+                try
+                {
+                    // LogToConsole($"{Recipe.BlitzId} - {component.ComponentBlitzId}");
+                    decimal componentUsageQty = (component.UnitQty * qty) / component.ContentQty;
+                    components.AddRange(ExtractRawMats(recipeListSS,Recipe, componentUsageQty));
+                }
+                catch (Exception ex)
+                {
+                    LogToConsole($"Error: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"Error: {ex.Message}");
+            
+                    throw;
+                }
+            }
+            else
+            {
+                // LogToConsole($"{component.ComponentBlitzId}");
+                var newComp = new ComponentModel
+                {
+                    BlitzId = component.BlitzId,
+                    ComponentName = component.ComponentName,
+                    ComponentBlitzId = component.ComponentBlitzId,
+                    Classification = component.Classification,
+                    ContentQty = component.ContentQty,
+                    WholeCost = component.WholeCost,
+                    WholeUom = component.WholeUom,
+                    UnitQty = component.UnitQty,
+                    UnitUom = component.UnitUom,
+                    CostPerUnit = component.CostPerUnit,
+                    TotalUnitQty = component.UnitQty * qty,
+                    BrandCode = component.BrandCode,
+                };
+                // LogToConsole($"Rawmats");
+                // LogToConsole("Added to component list");
+                components.Add(newComp);
+            }
+        }
+
+        return components
+        .GroupBy(excom => new
+        {
+            excom.ComponentBlitzId
+        }).Select(com => new ComponentModel
+        {
+            BlitzId = com.First().BlitzId,
+            ComponentName = com.First().ComponentName,
+            ComponentBlitzId = com.First().ComponentBlitzId,
+            Classification = com.First().Classification,
+            ContentQty = com.First().ContentQty,
+            WholeCost = com.First().WholeCost,
+            WholeUom = com.First().WholeUom,
+            UnitQty = com.First().UnitQty,
+            UnitUom = com.First().UnitUom,
+            CostPerUnit = com.First().CostPerUnit,
+            TotalUnitQty = com.Sum(u=>u.UnitQty),
+            BrandCode = com.First().BrandCode
+        })
+        .ToList();
+    }
+    
+    public void ExportExplosionResults(List<ExplosionResultModel> expEntities)
+    {
+        string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        string filePath = Path.Combine(desktopPath,$"BomEx{DateTime.Now.ToString("ddMMyy_hhmmss")}.xlsx");
+        using (var workbook = new XLWorkbook())
+        {
+            var worksheet = workbook.Worksheets.Add("Results");
+            //insert headers
+            worksheet.Cell(1,1).Value = "BRAND CODE";
+            worksheet.Cell(1,2).Value = "STORE CODE";
+            worksheet.Cell(1,3).Value = "STORE NAME";
+            worksheet.Cell(1,4).Value = "POS CODE";
+            worksheet.Cell(1,5).Value = "POS DESC";
+            worksheet.Cell(1,6).Value = "SALES QTY";
+            worksheet.Cell(1,7).Value = "ITEM CODE";
+            worksheet.Cell(1,8).Value = "ITEM DESC";
+            worksheet.Cell(1,9).Value = "CONTENT QTY";
+            worksheet.Cell(1,10).Value = "WHOLE UOM";
+            worksheet.Cell(1,11).Value = "WHOLE COST";
+            worksheet.Cell(1,12).Value = "UNIT QTY";
+            worksheet.Cell(1,13).Value = "UNIT COST";
+            worksheet.Cell(1,14).Value = "TOTAL UNIT QTY";
+            worksheet.Cell(1,15).Value = "TOTAL UNIT COST";
+            worksheet.Cell(1,16).Value = "ITEMS CONSUMED";
+            worksheet.Cell(1,17).Value = "TOTAL COST";
+            for (int i = 0; i < expEntities.Count; i++)
+            {
+                worksheet.Cell(i + 2, 1).Value = expEntities[i].BrandCode;
+                worksheet.Cell(i + 2, 2).Value = expEntities[i].StoreCode;
+                worksheet.Cell(i + 2, 3).Value = expEntities[i].StoreName;
+                worksheet.Cell(i + 2, 4).Value = expEntities[i].PosSalesCode;
+                worksheet.Cell(i + 2, 5).Value = expEntities[i].PosSalesName;
+                worksheet.Cell(i + 2, 6).Value = expEntities[i].SalesQuantity;
+                worksheet.Cell(i + 2, 7).Value = expEntities[i].ComponentItemCode;
+                worksheet.Cell(i + 2, 8).Value = expEntities[i].ComponentItemDesc;
+                worksheet.Cell(i + 2, 9).Value = expEntities[i].ComponentContentQty;
+                worksheet.Cell(i + 2, 10).Value = expEntities[i].ComponentWholeUom;
+                worksheet.Cell(i + 2, 11).Value = expEntities[i].ComponentWholeCost;
+                worksheet.Cell(i + 2, 12).Value = expEntities[i].ComponentUnitQty;
+                worksheet.Cell(i + 2, 13).Value = expEntities[i].ComponentUnitCost;
+                worksheet.Cell(i + 2, 14).Value = expEntities[i].ComponentTotalUnitQty;
+                worksheet.Cell(i + 2, 15).Value = expEntities[i].ComponentTotalUnitCost;
+                worksheet.Cell(i + 2, 16).Value = expEntities[i].TotalWholeUomConsumed;
+                worksheet.Cell(i + 2, 17).Value = expEntities[i].TotalWholeCost;
+            }
+            
+            workbook.SaveAs(filePath);
+        }
     }
     
     public void LogToConsole(string logMessage)
@@ -637,8 +889,10 @@
             {
                 LogToConsole("Recipes found in database.");
                 LogToConsole("Generating recipe nodes...");
-                DagTree = GenerateDag(recipes);
-                LogToConsole($"{DagTree.Count} recipe nodes generated.");
+                Recipes = recipes;
+                // DagTree = GenerateDag(recipes);
+                RecipeNodes = GenerateRecipeNodes(recipes);
+                LogToConsole($"{RecipeNodes.Count} recipe nodes generated.");
                 _hasRecipesData = true;
                 RecipeUploadBtnIcon = Icons.Material.Filled.Refresh;
                 RecipeUploadBtnColor = Color.Success;
@@ -699,6 +953,17 @@
             {
                 LogToConsole($"{salesEntries.Count} sales data found in database.");
                 Sales = salesEntries;
+                try
+                {
+                    LogToConsole("Generating sales entities");
+                    SalesEntities = GenerateSalesGroup(Sales);
+                    LogToConsole($"Success: Generated {SalesEntities.Count} Sales Entities");
+                }
+                catch (Exception ex)
+                {
+                    LogToConsole($"Error: {ex.Message}");
+                    throw;
+                }
                 _hasSalesData = true;
                 SalesDataUploadBtnIcon = Icons.Material.Filled.Refresh;
                 SalesDataUploadBtnColor = Color.Success;
@@ -725,10 +990,12 @@
         CheckSalesData();
         if (_hasRecipesData && _hasTagging && _hasSalesData)
         {
+            LogToConsole("All datasets are loaded. Blitz is ready to calculate.");
             _canExplode = true;
         }
         else
         {
+            LogToConsole("Missing datasets. Blitz cannot perform calculation.");
             _canExplode = false;
         }
     }
@@ -784,31 +1051,83 @@
         }
     }
 
-    public Dictionary<string, List<ComponentModel>> GenerateDag(List<RecipeModel> recipes)
+    // public Dictionary<string, List<ComponentModel>> GenerateDag(List<RecipeModel> recipes)
+    // {
+    //     return recipes.GroupBy(r => r.BlitzId)
+    //         .ToDictionary(
+    //             g => g.Key,
+    //             g=>g
+    //                 .GroupBy(r=>r.ComponentBlitzId)
+    //                 .Select(grp =>
+    //                 {
+    //                     var first = grp.First();
+    //                     return new ComponentModel
+    //                     {
+    //                         ComponentName = grp.Key,
+    //                         ComponentBlitzId = first.ComponentBlitzId,
+    //                         Classification = first.Classification,
+    //                         ContentQty = first.ContentQty,
+    //                         WholeCost = first.WholeCost,
+    //                         WholeUom = first.WholeUom,
+    //                         UnitQty = grp.Sum(r => r.UnitQty),
+    //                         UnitUom = first.UnitUom,
+    //                         CostPerUnit = first.CostPerUnit,
+    //                         BrandCode = first.BrandCode
+    //                     };
+    //                 })
+    //                 .ToList()
+    //         );
+    //     
+    // }
+
+    public List<RecipeNodeModel> GenerateRecipeNodes(List<RecipeModel> recipes)
     {
-        return recipes.GroupBy(r => r.BlitzId)
-            .ToDictionary(
-                g => g.Key,
-                g=>g
-                    .GroupBy(r=>r.ComponentBlitzId)
-                    .Select(grp =>
+        var nodes = recipes.GroupBy(r => new { r.BlitzId })
+            .Select(g => new RecipeNodeModel
+            {
+                BlitzId = g.Key.BlitzId,
+                BrandRecipeName = g.First().BrandRecipeName,
+                Components = g.GroupBy(r => new{r.BlitzId, r.ComponentBlitzId, r.ComponentName})
+                    .Select(cg => new ComponentModel
                     {
-                        var first = grp.First();
-                        return new ComponentModel
-                        {
-                            ComponentName = grp.Key,
-                            Classification = first.Classification,
-                            ContentQty = first.ContentQty,
-                            WholeCost = first.WholeCost,
-                            WholeUom = first.WholeUom,
-                            UnitQty = grp.Sum(r => r.UnitQty),
-                            UnitUom = first.UnitUom,
-                            CostPerUnit = first.CostPerUnit,
-                            BrandCode = first.BrandCode
-                        };
-                    })
-                    .ToList()
-            );
+                        BlitzId = cg.Key.BlitzId,
+                        ComponentName = cg.Key.ComponentName,
+                        ComponentBlitzId = cg.Key.ComponentBlitzId,
+                        Classification = cg.First().Classification,
+                        ContentQty = cg.First().ContentQty,
+                        WholeCost = cg.First().WholeCost,
+                        WholeUom = cg.First().WholeUom,
+                        UnitQty = cg.Sum(x=>x.UnitQty),
+                        UnitUom = cg.First().UnitUom,
+                        CostPerUnit = cg.First().CostPerUnit,
+                        TotalUnitQty = 0m,
+                        BrandCode = cg.First().BrandCode
+                    }).ToList()
+            }).ToList();
+        return nodes;
+    }
+
+    public List<SalesGroupModel> GenerateSalesGroup(List<SalesDataModel> salesData)
+    {
+        var SalesGroup = salesData.GroupBy(s => new
+            {
+                s.BrandCode,
+                s.StoreCode,
+                s.StoreName,
+                s.SalesPosCode,
+                s.SalesItemName,
+            })
+            .Select(sg => new SalesGroupModel
+            {
+                BrandCode = sg.First().BrandCode,
+                StoreCode = sg.First().StoreCode,
+                StoreName = sg.First().StoreName,
+                BrandPosCode = sg.First().BrandPosCode,
+                PosCode = sg.First().SalesPosCode,
+                PosItemDescription = sg.First().SalesItemName,
+                SalesQty = sg.Sum(sq => sq.SalesQuantity)
+            }).ToList();
+        return SalesGroup;
         
     }
     
@@ -846,62 +1165,78 @@
         InitializeMetaData();
         CheckAllData();
     }
-    
-    // public async Task UploadDummyDataAsync(IBrowserFile files)
-    // {
-    //     try
-    //     {
-    //         LogToConsole("Purging stored dummy data...");
-    //         LiteDbService.PurgeDummyData();
-    //         // read DummyData.xlsx
-    //         var file = files;
-    //         LogToConsole($"Reading {file.Name}.");
-    //         using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
-    //         using var memoryStream = new MemoryStream();
-    //         await stream.CopyToAsync(memoryStream);
-    //         memoryStream.Position = 0;
-    //         LogToConsole($"Finished reading {file.Name}.");
-    //         LogToConsole($"Saving contents of {file.Name}.");
-    //         try
-    //         {
-    //             SaveDummyData(memoryStream);
-    //         }
-    //         catch (Exception ex)
-    //         {
-    //             LogToConsole($"Failed to save contents of {file.Name} to the database");
-    //             throw;
-    //         }
-    //     }
-    //     catch (Exception ex)
-    //     {
-    //         LogToConsole("Purging failed. Database not found.");
-    //     }
-    // }
-    //
-    // public void SaveDummyData(Stream excelStream)
-    // {
-    //     using var workbook = new XLWorkbook(excelStream);
-    //     var worksheet = workbook.Worksheets.First();
-    //     var dummyDataList = new List<DummyDataModel>();
-    //
-    //     foreach (var row in worksheet.RowsUsed().Skip(1))
-    //     {
-    //         var data = new DummyDataModel
-    //         {
-    //             SomeName = row.Cell(1).GetString(),
-    //             SomeDecimal = row.Cell(2).GetValue<decimal>()
-    //         };
-    //         dummyDataList.Add(data);
-    //     }
-    //     LiteDbService.AddDummyData(dummyDataList);
-    //     LogToConsole("File Successfully saved.");
-    //
-    //     var dummydatas = LiteDbService.GetDummyData();
-    //     foreach (var dummydata in dummydatas)
-    //     {
-    //         LogToConsole($"{dummydata.SomeName} - {dummydata.SomeDecimal}");
-    //     }
-    // }
+    // var extractedcomponents = new List<ComponentModel>();
+        // RecipeNodeModel Recipe = new RecipeNodeModel();
+        // foreach (var comp in asmComp.Components)
+        // {
+        //     if (comp.Classification == "SUB RECIPE" || comp.Classification == "FINISHED GOODS")
+        //     {
+        //         try
+        //         {
+        //             LogToConsole($"Searching: {comp.ComponentBlitzId}");
+        //             try
+        //             {
+        //                 Recipe = RecipeNodes.Find(r => r.BlitzId == comp.ComponentBlitzId);
+        //             }
+        //             catch (Exception ex)
+        //             {
+        //                 Console.WriteLine(ex.Message);
+        //                 LogToConsole($"Error: {ex.Message}");
+        //             }
+        //             LogToConsole($"Returned: {Recipe.BlitzId}");
+        //             try
+        //             {
+        //                 extractedcomponents.AddRange(ExtractRawMats(Recipe, qty));
+        //             }
+        //             catch (Exception ex)
+        //             {
+        //                 LogToConsole($"Error: {ex.Message}");
+        //                 throw;
+        //                 
+        //             }
+        //         }
+        //         catch (Exception ex)
+        //         {
+        //             LogToConsole($"Error: {ex.Message}");
+        //             throw;
+        //         }
+        //         
+        //     }
+        //     else
+        //     {
+        //         comp.UnitQty *= qty;
+        //         LogToConsole($"Added {comp.UnitQty}{comp.UnitUom} of {comp.ComponentName}...");
+        //         extractedcomponents.Add(comp);
+        //     }
+        // }
+        //
+        // try
+        // {
+        // return extractedcomponents.GroupBy(excom => new
+        //     {
+        //         excom.ComponentBlitzId
+        //     }).Select(com => new ComponentModel
+        //     {
+        //         ComponentName = com.First().ComponentName,
+        //         ComponentBlitzId = com.First().ComponentBlitzId,
+        //         Classification = com.First().Classification,
+        //         ContentQty = com.First().ContentQty,
+        //         WholeCost = com.First().WholeCost,
+        //         WholeUom = com.First().WholeUom,
+        //         UnitQty = com.First().UnitQty,
+        //         UnitUom = com.First().UnitUom,
+        //         CostPerUnit = com.First().CostPerUnit,
+        //         TotalUnitQty = com.Sum(u=>u.ContentQty),
+        //         BrandCode = com.First().BrandCode
+        //     })
+        //     .ToList();
+        // }
+        // catch (Exception ex)
+        // {
+        //     LogToConsole($"Error: {ex.Message}");
+        //     // return Enumerable.Empty<ComponentModel>().ToList();
+        //     throw;
+        // }
     
 }
 @* <tr> *@
@@ -935,3 +1270,4 @@
 @*         Updated as of: N/A *@
 @*     </td> *@
 @* </tr> *@
+

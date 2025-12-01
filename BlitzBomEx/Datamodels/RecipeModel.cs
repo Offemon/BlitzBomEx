@@ -2,8 +2,6 @@ namespace BlitzBomEx.Datamodels;
 
 public class RecipeModel
 {
-    // public required string BomVersion { get; set; }
-    // public required DateTime BomVersionDate { get; set; }
     public required string BrandRecipeName { get; set; }
     public required string RecipeName { get; set; }
     public required string Classification { get; set; }
