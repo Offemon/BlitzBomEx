@@ -9,6 +9,7 @@ public class LiteDbService
     private readonly ILiteCollection<PosBomTaggingModel> _posBomTaggings;
     private readonly ILiteCollection<MetaDataModel> _metaData;
     private readonly ILiteCollection<SalesDataModel> _salesData;
+    private readonly ILiteCollection<BlitzGuardModel> _guards;
 
     public LiteDbService(string dbPath = "BlitzBomEx.db")
     {
@@ -17,6 +18,7 @@ public class LiteDbService
         _posBomTaggings =  _db.GetCollection<PosBomTaggingModel>("PosToBomTagging");
         _metaData = _db.GetCollection<MetaDataModel>("MetaData");
         _salesData = _db.GetCollection<SalesDataModel>("SalesData");
+        _guards = _db.GetCollection<BlitzGuardModel>("Guards");
     }
     public List<RecipeModel> GetRecipes() => _recipes.FindAll().ToList();
     public void AddRecipe(RecipeModel recipe) => _recipes.Insert(recipe);
@@ -36,6 +38,9 @@ public class LiteDbService
     public List<SalesDataModel> GetSalesData() => _salesData.FindAll().ToList();
     public void AddSalesData(List<SalesDataModel> salesData) => _salesData.Insert(salesData);
     public void PurgeSalesData() => _salesData.DeleteAll();
+    
+    public BlitzGuardModel? GetBlitzGuard() => _guards.FindAll().FirstOrDefault();
+    public void UpdateBlitzGuard(BlitzGuardModel blitzguard) => _guards.Upsert("singleton", blitzguard);
 
     // public void Dispose()
     // {

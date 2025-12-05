@@ -10,4 +10,5 @@ public class SalesDataModel
     public required string SalesPosCode {get; set;} = string.Empty;
     public required string SalesItemName {get; set;} = string.Empty;
     public required int SalesQuantity {get; set;}
+    public required decimal SalesAmount {get; set;}
 }

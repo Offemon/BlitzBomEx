@@ -6,6 +6,7 @@ public class RecipeModel
     public required string RecipeName { get; set; }
     public required string Classification { get; set; }
     public required string GeneralClassification { get; set; }
+    public required string ComponentItemCode { get; set; }
     public required string ComponentName { get; set; }
     public required decimal ContentQty  { get; set; }
     public required decimal WholeCost  { get; set; }

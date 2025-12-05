@@ -3,8 +3,11 @@ namespace BlitzBomEx.Datamodels;
 public class ComponentModel
 {
     public required string BlitzId  { get; set; }
+    public required string BrandRecipeName { get; set; }
+    public required string ComponentGenericDesc { get; set; } = string.Empty;
     public required string ComponentName { get; set; }
     public required string ComponentBlitzId { get; set; }
+    public required string ComponentItemCode { get; set; } = string.Empty;
     public required string Classification { get; set; }
     public required decimal ContentQty  { get; set; }
     public required decimal WholeCost  { get; set; }

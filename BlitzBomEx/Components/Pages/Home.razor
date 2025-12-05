@@ -1,6 +1,8 @@
 ﻿@page "/"
 @using ClosedXML.Excel
-@using LiteDB
+@using System.Net.NetworkInformation
+@using System.Text.Json
+@inject IDialogService DialogService
 @inject LiteDbService LiteDbService
 
 <MudStack>
@@ -169,12 +171,10 @@
     </MudPaper>
     @if (_isExploding)
     {
-        <MudCard>
-            <MudStack Class="d-flex align-center justify-center">
-                <MudProgressCircular Color="Color.Primary" Style="height:70px;width:70px;" Indeterminate="true"/>
-                <MudText>Calculating...</MudText>
-            </MudStack>
-        </MudCard>
+        <MudStack Class="d-flex align-center justify-center">
+            <MudProgressCircular Color="Color.Primary" Style="height:200px;width:200px;" Indeterminate="true"/>
+            <MudText>Calculating...</MudText>
+        </MudStack>
     }
     else
     {
@@ -261,8 +261,7 @@
         {
             LogToConsole($"Purgables initialization error: {ex.Message}");
         }
-            
-        
+        await InitializeBlitzGuard();
         await base.OnInitializedAsync();
     }
     
@@ -324,17 +323,18 @@
                 {
                     BrandRecipeName = xlsxContent[r].Cell(2).GetString(),
                     RecipeName = xlsxContent[r].Cell(4).GetString(),
+                    GenericDescription = xlsxContent[r].Cell(5).GetString(),
+                    ComponentItemCode = xlsxContent[r].Cell(7).GetString(),
                     ComponentName = xlsxContent[r].Cell(8).GetString(),
                     Classification = xlsxContent[r].Cell(9).GetString(),
                     GeneralClassification = xlsxContent[r].Cell(17).GetString(),
                     ContentQty = xlsxContent[r].Cell(10).GetValue<decimal>(),
-                    WholeCost = xlsxContent[r].Cell(10).GetValue<decimal>(),
+                    WholeCost = xlsxContent[r].Cell(11).GetValue<decimal>(),
                     WholeUom = xlsxContent[r].Cell(12).GetString(),
                     UnitQty = xlsxContent[r].Cell(13).GetValue<decimal>(),
                     UnitUom = xlsxContent[r].Cell(14).GetString(),
                     CostPerUnit = xlsxContent[r].Cell(15).GetValue<decimal>(),
                     BrandCode = xlsxContent[r].Cell(20).GetString(),
-                    GenericDescription = xlsxContent[r].Cell(21).GetString(),
                     BlitzId = xlsxContent[r].Cell(22).GetString(),
                     ComponentBlitzId = xlsxContent[r].Cell(23).GetString()
                 };
@@ -353,6 +353,7 @@
             CheckRecipesData();
             LogToConsole("Data Successfully saved.");
             BomDate = FormatDateTime(DateTime.Now);
+            CheckExplodable();
             _canPurge = HasPurgables();
             try
             {
@@ -446,6 +447,7 @@
             LogToConsole("Data successfully saved");
             TaggingDate = FormatDateTime(DateTime.Now);
             CheckTaggingData();
+            CheckExplodable();
             _canPurge = HasPurgables();
             try
             {
@@ -550,7 +552,8 @@
                         SalesDateTime = extractedDate,
                         SalesPosCode = xlsxContent[r].Cell(6).GetString(),
                         SalesItemName = xlsxContent[r].Cell(7).GetString(),
-                        SalesQuantity = xlsxContent[r].Cell(8).GetValue<int>()
+                        SalesQuantity = xlsxContent[r].Cell(8).GetValue<int>(),
+                        SalesAmount = xlsxContent[r].Cell(9).GetValue<decimal>()
                     };
                     salesEntryList.Add(data);
                 }
@@ -577,6 +580,7 @@
             SalesStartDate = FormatDateTime(sdt,false);
             SalesEndDate = FormatDateTime(edt,false);
             CheckSalesData();
+            CheckExplodable();
             _canPurge = HasPurgables();
             try
             {
@@ -635,57 +639,28 @@
         _isExploding = true;
         LogToConsole("Exploding...");
         LogToConsole($"{Recipes.Count}");
-        // await Task.Run(() =>
-        // {
-        //     foreach (var rec in recipeNodeSS)
-        //     {
-        //         // LogToConsole($"{rec.BlitzId} - {rec.BrandRecipeName}");
-        //         foreach (var component in rec.Components)
-        //         {
-        //             // LogToConsole($"{component.BlitzId} - {component.ComponentBlitzId}");
-        //             try
-        //             {
-        //                 LogToConsole($"{recipeNodeSS.Find(rn => rn.BlitzId == component.ComponentBlitzId)?.BlitzId}");
-        //             }
-        //             catch (Exception ex)
-        //             {
-        //                 LogToConsole($"{ex.Message}");
-        //                 throw;
-        //             }
-        //             
-        //         }
-        //     }
-        // });
         List<ExplosionResultModel> ExplosionResultEntities = new List<ExplosionResultModel>();
         await Task.Run(() =>
         {
-            LogToConsole($"Tags count: {tagListSS.Count}");
-            LogToConsole($"Sales count: {saleEntityListSS.Count}");
-            LogToConsole($"Recipe count: {recipeNodeSS.Count}");
+            // LogToConsole($"Tags count: {tagListSS.Count}");
+            // LogToConsole($"Sales count: {saleEntityListSS.Count}");
+            // LogToConsole($"Recipe count: {recipeNodeSS.Count}");
             int salesEntityCount = saleEntityListSS.Count;
-            //salesEntityCount
-            // foreach (var tag in tagListSS)
-            // {
-            //     // LogToConsole($"{tag.BlitzId} - {tag.BomRecipeName} - {tag.BrandPosCode}");
-            //     LogToConsole($"{tagListSS.Find(t => t.BrandPosCode == tag.BrandPosCode)?.BlitzId}");
-            //     salesEntityCount
-            // }
-            // LogToConsole($"saleEntityListSS Count: {saleEntityListSS.Count}");
-            for (int e = 0; e < saleEntityListSS.Count; e++)
+            for (int e = 0; e < salesEntityCount; e++)
             {
-                // _progressValue = (e+1)/saleEntityListSS.Count;
+
                 var salesentity = saleEntityListSS[e];
-                LogToConsole($"Entry Number: {e+1}");
+                // LogToConsole($"Entry Number: {e+1}");
                 string? MRepBlitzID = tagListSS.Find(t => t.BrandPosCode == salesentity.BrandPosCode)?.BlitzId;
                 if (string.IsNullOrEmpty(MRepBlitzID))
                 {
-                    // LogToConsole($"{salesentity.PosItemDescription} - {salesentity.BrandPosCode} has no bom.");
+                    LogToConsole($"{salesentity.PosItemDescription} - {salesentity.BrandPosCode} has no bom.");
                     continue;
                 }
                 RecipeNodeModel Recipe = recipeNodeSS.Find(r => r.BlitzId == MRepBlitzID);
                 if (Recipe is null)
                 {
-                    // LogToConsole($"{MRepBlitzID} - {salesentity.PosItemDescription} is a retail item");
+                    LogToConsole($"{MRepBlitzID} - {salesentity.PosItemDescription} is a retail item");
                     continue;
                 }
                 // LogToConsole($"Blitz ID: {Recipe.BlitzId}");
@@ -693,7 +668,7 @@
                 try
                 {
                     // LogToConsole($"Extracting: [{salesentity.SalesQty}] {Recipe.BrandRecipeName}");
-                    extractedComponents = ExtractRawMats(recipeNodeSS,Recipe, salesentity.SalesQty);
+                    extractedComponents = ExtractRawMats(recipeNodeSS,Recipe, salesentity.SalesQty,Recipe.BrandRecipeName);
                 }
                 catch (Exception ex)
                 {
@@ -713,12 +688,16 @@
                             PosSalesCode = salesentity.PosCode,
                             PosSalesName = salesentity.PosItemDescription,
                             SalesQuantity = salesentity.SalesQty,
-                            ComponentItemCode = comp.ComponentBlitzId,
+                            SalesAmount = salesentity.SalesAmount,
+                            BrandRecipeName = comp.BrandRecipeName,
+                            ComponentItemCode = comp.ComponentItemCode,
+                            ComponentGenericDesc = comp.ComponentGenericDesc,
                             ComponentItemDesc = comp.ComponentName,
                             ComponentContentQty = comp.ContentQty,
                             ComponentWholeUom = comp.WholeUom,
                             ComponentWholeCost = comp.WholeCost,
                             ComponentUnitQty = comp.UnitQty,
+                            ComponentUnitUom = comp.UnitUom,
                             ComponentUnitCost = comp.CostPerUnit,
                             ComponentTotalUnitQty = comp.TotalUnitQty,
                             ComponentTotalUnitCost = comp.TotalUnitQty * comp.CostPerUnit,
@@ -749,26 +728,22 @@
         }
     }
     
-    public List<ComponentModel> ExtractRawMats(List<RecipeNodeModel> recipeListSS,RecipeNodeModel asmComp, decimal qty)
+    public List<ComponentModel> ExtractRawMats(List<RecipeNodeModel> recipeListSS,RecipeNodeModel asmComp, decimal qty, string recipeName)
     {
-        // LogToConsole($"{asmComp.BrandRecipeName} has {asmComp.Components.Count} components");
         List<ComponentModel> components = new List<ComponentModel>();
         foreach (var component in asmComp.Components)
         {
             if (component.ContentQty == 0)
             {
-                // LogToConsole($"{component.ComponentName} - {component.ContentQty}");
                 continue;
             }
             var Recipe = recipeListSS.Find(rn => rn.BlitzId == component.ComponentBlitzId);
-            if (Recipe is not null)
+            if (Recipe is not null && (component.Classification == "SUB RECIPE" || component.Classification == "FINISHED GOODS"))
             {
-            // LogToConsole($"{Recipe.BrandRecipeName} - {Recipe.BlitzId}");
                 try
                 {
-                    // LogToConsole($"{Recipe.BlitzId} - {component.ComponentBlitzId}");
                     decimal componentUsageQty = (component.UnitQty * qty) / component.ContentQty;
-                    components.AddRange(ExtractRawMats(recipeListSS,Recipe, componentUsageQty));
+                    components.AddRange(ExtractRawMats(recipeListSS,Recipe, componentUsageQty,recipeName));
                 }
                 catch (Exception ex)
                 {
@@ -780,10 +755,13 @@
             }
             else
             {
-                // LogToConsole($"{component.ComponentBlitzId}");
+                
                 var newComp = new ComponentModel
                 {
                     BlitzId = component.BlitzId,
+                    BrandRecipeName = recipeName,
+                    ComponentGenericDesc = component.ComponentGenericDesc,
+                    ComponentItemCode = component.ComponentItemCode,
                     ComponentName = component.ComponentName,
                     ComponentBlitzId = component.ComponentBlitzId,
                     Classification = component.Classification,
@@ -796,8 +774,6 @@
                     TotalUnitQty = component.UnitQty * qty,
                     BrandCode = component.BrandCode,
                 };
-                // LogToConsole($"Rawmats");
-                // LogToConsole("Added to component list");
                 components.Add(newComp);
             }
         }
@@ -809,6 +785,9 @@
         }).Select(com => new ComponentModel
         {
             BlitzId = com.First().BlitzId,
+            BrandRecipeName = com.First().BrandRecipeName,
+            ComponentGenericDesc = com.First().ComponentGenericDesc,
+            ComponentItemCode = com.First().ComponentItemCode,
             ComponentName = com.First().ComponentName,
             ComponentBlitzId = com.First().ComponentBlitzId,
             Classification = com.First().Classification,
@@ -818,7 +797,7 @@
             UnitQty = com.First().UnitQty,
             UnitUom = com.First().UnitUom,
             CostPerUnit = com.First().CostPerUnit,
-            TotalUnitQty = com.Sum(u=>u.UnitQty),
+            TotalUnitQty = com.Sum(u=>u.TotalUnitQty),
             BrandCode = com.First().BrandCode
         })
         .ToList();
@@ -838,17 +817,23 @@
             worksheet.Cell(1,4).Value = "POS CODE";
             worksheet.Cell(1,5).Value = "POS DESC";
             worksheet.Cell(1,6).Value = "SALES QTY";
-            worksheet.Cell(1,7).Value = "ITEM CODE";
-            worksheet.Cell(1,8).Value = "ITEM DESC";
-            worksheet.Cell(1,9).Value = "CONTENT QTY";
-            worksheet.Cell(1,10).Value = "WHOLE UOM";
-            worksheet.Cell(1,11).Value = "WHOLE COST";
-            worksheet.Cell(1,12).Value = "UNIT QTY";
-            worksheet.Cell(1,13).Value = "UNIT COST";
-            worksheet.Cell(1,14).Value = "TOTAL UNIT QTY";
+            worksheet.Cell(1,7).Value = "SALES AMT";
+            worksheet.Cell(1,8).Value = "BRAND RECIPE NAME";
+            worksheet.Cell(1,9).Value = "ITEM CODE";
+            worksheet.Cell(1,10).Value = "ITEM GEN DESC";
+            worksheet.Cell(1,11).Value = "ITEM DESC";
+            // worksheet.Cell(1,10).Value = "CONTENT QTY";
+            // worksheet.Cell(1,12).Value = "WHOLE COST";
+            // worksheet.Cell(1,13).Value = "UNIT QTY";
+            worksheet.Cell(1,12).Value = "TOTAL UNIT QTY";
+            worksheet.Cell(1,13).Value = "UNIT UOM";
+            worksheet.Cell(1,14).Value = "UNIT COST";
             worksheet.Cell(1,15).Value = "TOTAL UNIT COST";
-            worksheet.Cell(1,16).Value = "ITEMS CONSUMED";
-            worksheet.Cell(1,17).Value = "TOTAL COST";
+            worksheet.Cell(1,16).Value = "WHOLE QTY";
+            worksheet.Cell(1,17).Value = "WHOLE UOM";
+            // worksheet.Cell(1,19).Value = "TOTAL COST";
+            
+            // Inser Explosion Data
             for (int i = 0; i < expEntities.Count; i++)
             {
                 worksheet.Cell(i + 2, 1).Value = expEntities[i].BrandCode;
@@ -857,19 +842,26 @@
                 worksheet.Cell(i + 2, 4).Value = expEntities[i].PosSalesCode;
                 worksheet.Cell(i + 2, 5).Value = expEntities[i].PosSalesName;
                 worksheet.Cell(i + 2, 6).Value = expEntities[i].SalesQuantity;
-                worksheet.Cell(i + 2, 7).Value = expEntities[i].ComponentItemCode;
-                worksheet.Cell(i + 2, 8).Value = expEntities[i].ComponentItemDesc;
-                worksheet.Cell(i + 2, 9).Value = expEntities[i].ComponentContentQty;
-                worksheet.Cell(i + 2, 10).Value = expEntities[i].ComponentWholeUom;
-                worksheet.Cell(i + 2, 11).Value = expEntities[i].ComponentWholeCost;
-                worksheet.Cell(i + 2, 12).Value = expEntities[i].ComponentUnitQty;
-                worksheet.Cell(i + 2, 13).Value = expEntities[i].ComponentUnitCost;
-                worksheet.Cell(i + 2, 14).Value = expEntities[i].ComponentTotalUnitQty;
+                worksheet.Cell(i + 2, 7).Value = expEntities[i].SalesAmount;
+                worksheet.Cell(i + 2, 8).Value = expEntities[i].BrandRecipeName;
+                worksheet.Cell(i + 2, 9).Value = expEntities[i].ComponentItemCode;
+                worksheet.Cell(i + 2, 10).Value = expEntities[i].ComponentGenericDesc;
+                worksheet.Cell(i + 2, 11).Value = expEntities[i].ComponentItemDesc;
+                // worksheet.Cell(i + 2, 10).Value = expEntities[i].ComponentContentQty;
+                // worksheet.Cell(i + 2, 12).Value = expEntities[i].ComponentWholeCost;
+                // worksheet.Cell(i + 2, 13).Value = expEntities[i].ComponentUnitQty;
+                worksheet.Cell(i + 2, 12).Value = expEntities[i].ComponentTotalUnitQty;
+                worksheet.Cell(i + 2, 13).Value = expEntities[i].ComponentUnitUom;
+                worksheet.Cell(i + 2, 14).Value = expEntities[i].ComponentUnitCost;
                 worksheet.Cell(i + 2, 15).Value = expEntities[i].ComponentTotalUnitCost;
                 worksheet.Cell(i + 2, 16).Value = expEntities[i].TotalWholeUomConsumed;
-                worksheet.Cell(i + 2, 17).Value = expEntities[i].TotalWholeCost;
+                worksheet.Cell(i + 2, 17).Value = expEntities[i].ComponentWholeUom;
+                // worksheet.Cell(i + 2, 19).Value = expEntities[i].TotalWholeCost;
             }
-            
+
+            worksheet.Row(1).Style.Font.Bold = true;
+            worksheet.Columns().AdjustToContents();
+            worksheet.SheetView.FreezeRows(1);
             workbook.SaveAs(filePath);
         }
     }
@@ -1000,6 +992,15 @@
         }
     }
 
+    public void CheckExplodable()
+    {
+        if (_hasRecipesData && _hasTagging && _hasSalesData)
+        {
+            LogToConsole("All datasets are loaded. Blitz is ready to calculate.");
+            _canExplode = true;
+        }
+    }
+
     public void DisableAllBtn()
     {
         _isEnabled = false;
@@ -1087,12 +1088,16 @@
             {
                 BlitzId = g.Key.BlitzId,
                 BrandRecipeName = g.First().BrandRecipeName,
+                GeneralClassification = g.First().GeneralClassification,
                 Components = g.GroupBy(r => new{r.BlitzId, r.ComponentBlitzId, r.ComponentName})
                     .Select(cg => new ComponentModel
                     {
                         BlitzId = cg.Key.BlitzId,
+                        BrandRecipeName = cg.First().BrandRecipeName,
+                        ComponentGenericDesc = cg.First().GenericDescription,
                         ComponentName = cg.Key.ComponentName,
                         ComponentBlitzId = cg.Key.ComponentBlitzId,
+                        ComponentItemCode = cg.First().ComponentItemCode,
                         Classification = cg.First().Classification,
                         ContentQty = cg.First().ContentQty,
                         WholeCost = cg.First().WholeCost,
@@ -1125,10 +1130,46 @@
                 BrandPosCode = sg.First().BrandPosCode,
                 PosCode = sg.First().SalesPosCode,
                 PosItemDescription = sg.First().SalesItemName,
-                SalesQty = sg.Sum(sq => sq.SalesQuantity)
+                SalesQty = sg.Sum(sq => sq.SalesQuantity),
+                SalesAmount = sg.Sum(sq => sq.SalesAmount)
             }).ToList();
         return SalesGroup;
         
+    }
+    
+    //Blitz Guard
+    public Task OpenActivationDialogAsync()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = false, NoHeader = true, BackdropClick = false};
+        return DialogService.ShowAsync<ActivationDialog>("Activation Dialog",options);
+    }
+    
+    public async Task InitializeBlitzGuard()
+    {
+        BlitzEngine blitz = new BlitzEngine();
+        var blitzguard = LiteDbService.GetBlitzGuard();
+        if (blitzguard is null)
+        {
+            await OpenActivationDialogAsync();
+        }
+        if (blitzguard is not null)
+        {
+            string getemacadd = blitz.GetMacAdd();
+            if (blitzguard.Umac != getemacadd)
+            {
+                await OpenActivationDialogAsync();
+            }
+        }
+
+        // else
+        // {
+        //     blitzguard = new BlitzGuardModel
+        //     {
+        //         Umac = blitz.GetMacAdd(),
+        //         // ActivationDate = blitz.TimeNowAsync().Result
+        //     };
+        //     LiteDbService.UpdateBlitzGuard(blitzguard);
+        // }
     }
     
     public void PurgeAllData()

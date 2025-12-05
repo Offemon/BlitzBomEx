@@ -1,0 +1,97 @@
+@inject LiteDbService LiteDbService
+<MudDialog>
+    <TitleContent>
+        Activate Calculator
+    </TitleContent>
+    <DialogContent>
+        <MudStack>
+            @* <MudText>Enter Activation Code:</MudText> *@
+            <MudTextField T="string"
+                          HelperText="Activation Code"
+                          InputType="InputType.Password"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Key"
+                          AdornmentColor="Color.Info"
+                          @bind-Value="_activationCode"/>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Activate"
+                   Variant="Variant.Filled"
+                   StartIcon="@Icons.Material.Filled.LockOpen"
+                   Color="Color.Primary"
+                >Activate</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; }
+
+    private string _macAdd = string.Empty;
+    private string _dayToday = string.Empty;
+    private string _activationCode { get; set; }
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+    }
+
+    private void Activate()
+    {
+        if (CheckSum(_activationCode))
+        {
+            try
+            {
+            // Insert Activation Logic
+            BlitzEngine blitz = new BlitzEngine();
+            BlitzGuardModel blitzGaurdObj = new BlitzGuardModel
+            {
+                Umac = blitz.GetMacAdd(),
+                // ActivationDate = await 
+            };
+            LiteDbService.UpdateBlitzGuard(blitzGaurdObj);
+            MudDialog.Close(DialogResult.Ok(true));
+
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                throw;
+            }
+        }
+    }
+
+    private bool CheckSum(string activationCode)
+    {
+        if (string.IsNullOrWhiteSpace(activationCode))
+        {
+            return false;
+        }
+        
+        if(activationCode.Length !=9)
+        {
+            return false;
+        }
+        if (GetSum(activationCode) != "9")
+        {
+            return false;
+        }
+        return true;
+    }
+
+    public string GetSum(string activationCode)
+    {
+        int sum = 0;
+        foreach (var c in activationCode)
+        {
+            sum += int.TryParse(c.ToString(), out int i)? i : 0;
+        }
+
+        if (sum.ToString().Length !=1)
+        {
+            return GetSum(sum.ToString());
+        }
+        return sum.ToString();
+    }
+}
